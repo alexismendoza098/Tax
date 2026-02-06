@@ -1,0 +1,3139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Recuperación de IVA - Demo Interactivo</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e14;
+            --bg-secondary: #111820;
+            --bg-tertiary: #1a2332;
+            --accent-green: #00ff9d;
+            --accent-blue: #00b4ff;
+            --accent-yellow: #ffd700;
+            --accent-red: #ff4757;
+            --accent-purple: #a855f7;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #484f58;
+            --border-color: #30363d;
+            --glow-green: 0 0 20px rgba(0, 255, 157, 0.3);
+            --glow-blue: 0 0 20px rgba(0, 180, 255, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(0, 255, 157, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 157, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Header */
+        header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(10, 14, 20, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--bg-primary);
+        }
+
+        .logo-text {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .logo-text span {
+            color: var(--accent-green);
+        }
+
+        nav ul {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        nav a:hover {
+            color: var(--accent-green);
+        }
+
+        /* Main content */
+        main {
+            position: relative;
+            z-index: 1;
+            padding-top: 80px;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding: 4rem 2rem 6rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-green), transparent);
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto 2rem;
+        }
+
+        .hero-badges {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Process Flow */
+        .process-section {
+            padding: 4rem 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: var(--accent-green);
+            border-radius: 2px;
+        }
+
+        /* Process Steps */
+        .process-flow {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 4rem;
+        }
+
+        @media (max-width: 1200px) {
+            .process-flow { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 600px) {
+            .process-flow { grid-template-columns: 1fr; }
+        }
+
+        .process-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .process-card:hover {
+            border-color: var(--accent-green);
+            transform: translateY(-4px);
+            box-shadow: var(--glow-green);
+        }
+
+        .process-card.active {
+            border-color: var(--accent-green);
+            box-shadow: var(--glow-green);
+        }
+
+        .process-number {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--accent-green);
+        }
+
+        .process-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .process-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .process-card p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .process-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 1rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(0, 255, 157, 0.1);
+            border-radius: 100px;
+            font-size: 0.75rem;
+            color: var(--accent-green);
+        }
+
+        /* Detail Panel */
+        .detail-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .detail-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .detail-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .detail-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .detail-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .detail-tab:hover, .detail-tab.active {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .detail-content {
+            padding: 1.5rem;
+            display: none;
+        }
+
+        .detail-content.active {
+            display: block;
+        }
+
+        /* Simulator */
+        .simulator {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .simulator-header {
+            padding: 1rem;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .simulator-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .simulator-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .simulator-dot.red { background: #ff5f56; }
+        .simulator-dot.yellow { background: #ffbd2e; }
+        .simulator-dot.green { background: #27ca40; }
+
+        .simulator-title {
+            margin-left: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .simulator-body {
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .sim-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 0.5rem;
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .sim-prompt {
+            color: var(--accent-green);
+            flex-shrink: 0;
+        }
+
+        .sim-output {
+            color: var(--text-secondary);
+        }
+
+        .sim-success {
+            color: var(--accent-green);
+        }
+
+        .sim-error {
+            color: var(--accent-red);
+        }
+
+        .sim-warning {
+            color: var(--accent-yellow);
+        }
+
+        .sim-info {
+            color: var(--accent-blue);
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent-green);
+            box-shadow: var(--glow-green);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            box-shadow: var(--glow-green);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent-green);
+        }
+
+        /* Code Block */
+        .code-block {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .code-header {
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+        }
+
+        .code-lang {
+            color: var(--accent-blue);
+            font-weight: 500;
+        }
+
+        .code-copy {
+            padding: 0.25rem 0.5rem;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .code-copy:hover {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .code-content {
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+
+        .code-content .keyword { color: var(--accent-purple); }
+        .code-content .string { color: var(--accent-green); }
+        .code-content .comment { color: var(--text-muted); }
+        .code-content .function { color: var(--accent-blue); }
+        .code-content .number { color: var(--accent-yellow); }
+
+        /* Flow Diagram */
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .flow-node {
+            padding: 1rem 1.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .flow-node.highlight {
+            border-color: var(--accent-green);
+            box-shadow: var(--glow-green);
+        }
+
+        .flow-arrow {
+            color: var(--accent-green);
+            font-size: 1.5rem;
+        }
+
+        /* Data Table */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background: var(--bg-tertiary);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .data-table td {
+            font-size: 0.9rem;
+        }
+
+        .data-table tr:hover {
+            background: rgba(0, 255, 157, 0.05);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-badge.success {
+            background: rgba(0, 255, 157, 0.1);
+            color: var(--accent-green);
+        }
+
+        .status-badge.pending {
+            background: rgba(255, 215, 0, 0.1);
+            color: var(--accent-yellow);
+        }
+
+        .status-badge.error {
+            background: rgba(255, 71, 87, 0.1);
+            color: var(--accent-red);
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            margin: 1.5rem 0;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-green), var(--accent-blue));
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        /* Footer */
+        footer {
+            padding: 3rem 2rem;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: var(--accent-green);
+            text-decoration: none;
+        }
+
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        .slide-up {
+            animation: slideUp 0.5s ease forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Loading spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* FAQ Accordion */
+        .open > div:last-child {
+            max-height: 200px !important;
+        }
+        
+        .open button span:last-child {
+            transform: rotate(45deg);
+        }
+
+        /* Sandbox styles */
+        .sandbox-content {
+            animation: fadeIn 0.3s ease;
+        }
+
+        #drop-zone:hover {
+            border-color: var(--accent-green) !important;
+            background: rgba(0, 255, 157, 0.05) !important;
+        }
+
+        /* Login Overlay */
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-overlay.hidden {
+            display: none !important;
+        }
+
+        .login-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 3rem;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .login-header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .login-form .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .login-error {
+            background: rgba(255, 71, 87, 0.1);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            text-align: center;
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .login-footer {
+            margin-top: 2rem;
+            text-align: center;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .login-footer p {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        /* Hide main content until authenticated */
+        .app-content {
+            display: none;
+        }
+
+        .app-content.visible {
+            display: block;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="logo-icon" style="width: 60px; height: 60px; font-size: 24px; margin: 0 auto 1.5rem;">IVA</div>
+                <h1>Sistema de Recuperación de IVA</h1>
+                <p>Acceso restringido - Ingresa tus credenciales</p>
+            </div>
+            
+            <form onsubmit="attemptLogin(event)" class="login-form">
+                <div class="form-group">
+                    <label class="form-label">Usuario</label>
+                    <input type="text" class="form-input" id="login-user" placeholder="Usuario" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" class="form-input" id="login-password" placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <div id="login-error" class="login-error" style="display: none;">
+                    ❌ Credenciales incorrectas
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+                    🔐 Ingresar
+                </button>
+            </form>
+            
+            <div class="login-footer">
+                <p>Demo privado - Solicita acceso al administrador</p>
+            </div>
+        </div>
+    </div>
+
+    <header style="display: none;">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">IVA</div>
+                <div class="logo-text">Tax<span>Recovery</span></div>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#proceso">Proceso</a></li>
+                    <li><a href="#descargas" style="color: #ff6b35; font-weight: 600;">⬇️ Descargar</a></li>
+                    <li><a href="#instalacion">Instalación</a></li>
+                    <li><a href="#faq">FAQ</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main style="display: none;">
+        <section class="hero">
+            <h1>Sistema de Recuperación de IVA</h1>
+            <p>Plataforma de demostración interactiva para el proceso completo de descarga, procesamiento y cálculo de impuestos desde el SAT México</p>
+            <div class="hero-badges">
+                <span class="badge"><span class="badge-dot"></span> Conexión Real SAT</span>
+                <span class="badge">📄 CFDI 4.0</span>
+                <span class="badge">🔐 e.Firma / FIEL</span>
+                <span class="badge">🇲🇽 SAT México</span>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
+                <a href="#descargas" class="btn btn-primary" style="background: linear-gradient(135deg, #ff6b35, #ff4757); padding: 1rem 2rem; font-size: 1rem;">
+                    ⬇️ Descargar Scripts
+                </a>
+                <a href="#proceso" class="btn btn-secondary" style="padding: 1rem 2rem; font-size: 1rem;">
+                    Ver Demo Interactivo
+                </a>
+            </div>
+        </section>
+
+        <section class="process-section" id="proceso">
+            <h2 class="section-title">Flujo del Proceso</h2>
+            
+            <div class="process-flow">
+                <div class="process-card active" data-step="1" onclick="selectStep(1)">
+                    <span class="process-number">1</span>
+                    <div class="process-icon">🔐</div>
+                    <h3>Autenticación</h3>
+                    <p>Cargar FIEL (.cer + .key) y autenticar con el SAT</p>
+                    <span class="process-status"><span class="badge-dot"></span> Iniciar aquí</span>
+                </div>
+
+                <div class="process-card" data-step="2" onclick="selectStep(2)">
+                    <span class="process-number">2</span>
+                    <div class="process-icon">📥</div>
+                    <h3>Descarga</h3>
+                    <p>Solicitar y descargar Metadatos y CFDIs del SAT</p>
+                    <span class="process-status">Pendiente</span>
+                </div>
+
+                <div class="process-card" data-step="3" onclick="selectStep(3)">
+                    <span class="process-number">3</span>
+                    <div class="process-icon">📊</div>
+                    <h3>Aplanamiento</h3>
+                    <p>Extraer y estructurar datos de los XMLs en CSVs</p>
+                    <span class="process-status">Pendiente</span>
+                </div>
+
+                <div class="process-card" data-step="4" onclick="selectStep(4)">
+                    <span class="process-number">4</span>
+                    <div class="process-icon">💰</div>
+                    <h3>Cálculo IVA</h3>
+                    <p>Calcular IVA trasladado, acreditable y saldo</p>
+                    <span class="process-status">Pendiente</span>
+                </div>
+            </div>
+
+            <!-- Step 1: Autenticación -->
+            <div class="detail-panel" id="panel-1">
+                <div class="detail-header">
+                    <h2>🔐 Paso 1: Autenticación con e.Firma</h2>
+                    <div class="detail-tabs">
+                        <button class="detail-tab active" onclick="showTab(1, 'simulator')">Simulador</button>
+                        <button class="detail-tab" onclick="showTab(1, 'code')">Código</button>
+                        <button class="detail-tab" onclick="showTab(1, 'docs')">Documentación</button>
+                    </div>
+                </div>
+
+                <div class="detail-content active" id="panel-1-simulator">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">RFC del Contribuyente</label>
+                            <input type="text" class="form-input" id="rfc-input" placeholder="ABC123456XXX" value="AAA010101AAA">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Archivo .cer (Certificado)</label>
+                            <input type="text" class="form-input" placeholder="certificado.cer" value="certificado.cer" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Archivo .key (Llave Privada)</label>
+                            <input type="text" class="form-input" placeholder="llave.key" value="Claveprivada.key" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Contraseña FIEL</label>
+                            <input type="password" class="form-input" id="password-input" placeholder="••••••••" value="demo123">
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="simulateAuth()" id="btn-auth">
+                        🔐 Autenticar con SAT
+                    </button>
+
+                    <div class="simulator" style="margin-top: 1.5rem;">
+                        <div class="simulator-header">
+                            <div class="simulator-dots">
+                                <span class="simulator-dot red"></span>
+                                <span class="simulator-dot yellow"></span>
+                                <span class="simulator-dot green"></span>
+                            </div>
+                            <span class="simulator-title">Terminal - Autenticación SAT</span>
+                        </div>
+                        <div class="simulator-body" id="auth-output">
+                            <div class="sim-line" style="animation-delay: 0s;">
+                                <span class="sim-prompt">$</span>
+                                <span class="sim-output">Esperando inicio de autenticación...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-content" id="panel-1-code">
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">Python - sat_extractor.py</span>
+                            <button class="code-copy" onclick="copyCode(this)">Copiar</button>
+                        </div>
+                        <div class="code-content">
+<span class="keyword">def</span> <span class="function">fn_authenticate</span>(self, param_silent: bool = <span class="keyword">False</span>) -> bool:
+    <span class="string">"""
+    Autentica con el servicio del SAT.
+    
+    RECIBE: param_silent (bool) - Si True, no muestra mensajes
+    DEVUELVE: (bool) True si la autenticación fue exitosa
+    """</span>
+    <span class="comment"># CAPA 1: EXTRACCIÓN</span>
+    <span class="keyword">if not</span> self._current_fiel:
+        <span class="keyword">if not</span> param_silent:
+            self._internal_log(<span class="string">"No hay FIEL seleccionada"</span>, <span class="string">"error"</span>)
+        <span class="keyword">return</span> <span class="keyword">False</span>
+
+    <span class="comment"># CAPA 3: CÁLCULO</span>
+    <span class="keyword">try</span>:
+        <span class="keyword">from</span> cfdiclient <span class="keyword">import</span> Autenticacion
+
+        _auth_service = <span class="function">Autenticacion</span>(self._current_fiel)
+        _token = _auth_service.<span class="function">obtener_token</span>()
+
+        <span class="keyword">if</span> _token:
+            self._auth_token = _token
+            <span class="comment"># CAPA 4: OUTPUT</span>
+            <span class="keyword">if not</span> param_silent:
+                self._internal_log(<span class="string">"Autenticación exitosa"</span>)
+            <span class="keyword">return</span> <span class="keyword">True</span>
+
+    <span class="keyword">except</span> Exception <span class="keyword">as</span> e:
+        <span class="keyword">if not</span> param_silent:
+            self._internal_log(<span class="string">f"Error de autenticación: {e}"</span>, <span class="string">"error"</span>)
+
+    <span class="keyword">return</span> <span class="keyword">False</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-content" id="panel-1-docs">
+                    <h3 style="margin-bottom: 1rem;">📋 ¿Qué es la e.Firma (FIEL)?</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        La <strong>Firma Electrónica Avanzada (FIEL)</strong> es un archivo digital que funciona como una firma autógrafa. 
+                        Se compone de dos archivos:
+                    </p>
+                    
+                    <div class="flow-diagram">
+                        <div class="flow-node">
+                            <strong>📜 .cer</strong><br>
+                            <small style="color: var(--text-secondary);">Certificado público</small>
+                        </div>
+                        <span class="flow-arrow">+</span>
+                        <div class="flow-node">
+                            <strong>🔑 .key</strong><br>
+                            <small style="color: var(--text-secondary);">Llave privada</small>
+                        </div>
+                        <span class="flow-arrow">+</span>
+                        <div class="flow-node">
+                            <strong>🔒 Contraseña</strong><br>
+                            <small style="color: var(--text-secondary);">Para descifrar</small>
+                        </div>
+                        <span class="flow-arrow">=</span>
+                        <div class="flow-node highlight">
+                            <strong>✅ Token SAT</strong><br>
+                            <small style="color: var(--text-secondary);">Acceso autorizado</small>
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 1.5rem 0 1rem;">⚙️ Flujo de Autenticación</h4>
+                    <ol style="color: var(--text-secondary); padding-left: 1.5rem;">
+                        <li style="margin-bottom: 0.5rem;">Se leen los archivos .cer y .key del disco</li>
+                        <li style="margin-bottom: 0.5rem;">Se crea un objeto FIEL con la contraseña</li>
+                        <li style="margin-bottom: 0.5rem;">Se envía solicitud al endpoint de Autenticación del SAT</li>
+                        <li style="margin-bottom: 0.5rem;">El SAT valida la firma digital y devuelve un TOKEN</li>
+                        <li>El TOKEN se usa para todas las operaciones siguientes</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Step 2: Descarga -->
+            <div class="detail-panel" id="panel-2" style="display: none;">
+                <div class="detail-header">
+                    <h2>📥 Paso 2: Descarga de CFDIs</h2>
+                    <div class="detail-tabs">
+                        <button class="detail-tab active" onclick="showTab(2, 'simulator')">Simulador</button>
+                        <button class="detail-tab" onclick="showTab(2, 'code')">Código</button>
+                        <button class="detail-tab" onclick="showTab(2, 'docs')">Documentación</button>
+                    </div>
+                </div>
+
+                <div class="detail-content active" id="panel-2-simulator">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Fecha Inicial</label>
+                            <input type="date" class="form-input" id="date-start" value="2025-01-01">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha Final</label>
+                            <input type="date" class="form-input" id="date-end" value="2025-01-31">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Descarga</label>
+                            <select class="form-input" id="download-type">
+                                <option value="Metadata">Metadata (rápido)</option>
+                                <option value="CFDI">CFDI completos</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tipo de CFDI</label>
+                            <select class="form-input" id="cfdi-type">
+                                <option value="RECEIVED">Recibidos</option>
+                                <option value="ISSUED">Emitidos</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="simulateDownload()" id="btn-download" disabled>
+                        📥 Solicitar Descarga
+                    </button>
+
+                    <div class="progress-container" id="download-progress" style="display: none;">
+                        <div class="progress-label">
+                            <span>Progreso de descarga</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="simulator" style="margin-top: 1.5rem;">
+                        <div class="simulator-header">
+                            <div class="simulator-dots">
+                                <span class="simulator-dot red"></span>
+                                <span class="simulator-dot yellow"></span>
+                                <span class="simulator-dot green"></span>
+                            </div>
+                            <span class="simulator-title">Terminal - Descarga Masiva SAT</span>
+                        </div>
+                        <div class="simulator-body" id="download-output">
+                            <div class="sim-line">
+                                <span class="sim-prompt">$</span>
+                                <span class="sim-output">Autentícate primero para habilitar la descarga...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-content" id="panel-2-code">
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">Python - Solicitud de Descarga</span>
+                            <button class="code-copy" onclick="copyCode(this)">Copiar</button>
+                        </div>
+                        <div class="code-content">
+<span class="keyword">def</span> <span class="function">_internal_send_request</span>(self, param_start, param_end, param_download_type, param_cfdi_type):
+    <span class="string">"""Envía una solicitud de descarga al SAT."""</span>
+    <span class="keyword">from</span> cfdiclient <span class="keyword">import</span> SolicitaDescargaEmitidos, SolicitaDescargaRecibidos
+
+    <span class="keyword">if</span> param_cfdi_type.upper() == <span class="string">'ISSUED'</span>:
+        _service_class = SolicitaDescargaEmitidos
+        _kwargs = {<span class="string">'rfc_emisor'</span>: self._rfc_solicitante}
+    <span class="keyword">else</span>:
+        _service_class = SolicitaDescargaRecibidos
+        _kwargs = {<span class="string">'rfc_receptor'</span>: self._rfc_solicitante}
+
+    _service = <span class="function">_service_class</span>(self._current_fiel, timeout=<span class="number">120</span>)
+
+    _response = _service.<span class="function">solicitar_descarga</span>(
+        self._auth_token,
+        self._rfc_solicitante,
+        param_start,
+        param_end,
+        tipo_solicitud=param_download_type,
+        **_kwargs
+    )
+
+    <span class="comment"># Respuesta incluye: cod_estatus, mensaje, id_solicitud</span>
+    <span class="keyword">return</span> _response.get(<span class="string">'id_solicitud'</span>)
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-content" id="panel-2-docs">
+                    <h3 style="margin-bottom: 1rem;">📋 Estados de Solicitud SAT</h3>
+                    
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Estado</th>
+                                <th>Descripción</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>1</code></td>
+                                <td><span class="status-badge pending">📤 Aceptada</span></td>
+                                <td>Solicitud recibida y en cola</td>
+                                <td>Esperar</td>
+                            </tr>
+                            <tr>
+                                <td><code>2</code></td>
+                                <td><span class="status-badge pending">⏳ En proceso</span></td>
+                                <td>SAT generando archivos</td>
+                                <td>Esperar</td>
+                            </tr>
+                            <tr>
+                                <td><code>3</code></td>
+                                <td><span class="status-badge success">✅ Lista</span></td>
+                                <td>Paquetes listos para descarga</td>
+                                <td>Descargar</td>
+                            </tr>
+                            <tr>
+                                <td><code>4</code></td>
+                                <td><span class="status-badge error">❌ Error</span></td>
+                                <td>Error en la solicitud</td>
+                                <td>Reintentar</td>
+                            </tr>
+                            <tr>
+                                <td><code>5</code></td>
+                                <td><span class="status-badge error">🚫 Rechazada</span></td>
+                                <td>SAT rechazó la solicitud</td>
+                                <td>Verificar parámetros</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4 style="margin: 1.5rem 0 1rem;">⚠️ Límites del SAT</h4>
+                    <ul style="color: var(--text-secondary); padding-left: 1.5rem;">
+                        <li style="margin-bottom: 0.5rem;"><strong>Metadata:</strong> Máximo 1,000,000 registros por solicitud</li>
+                        <li style="margin-bottom: 0.5rem;"><strong>CFDI:</strong> Máximo 200,000 XMLs por solicitud</li>
+                        <li style="margin-bottom: 0.5rem;"><strong>Caducidad:</strong> Los paquetes expiran en 72 horas</li>
+                        <li><strong>Períodos:</strong> Se recomienda dividir en rangos de 7 días</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Step 3: Aplanamiento -->
+            <div class="detail-panel" id="panel-3" style="display: none;">
+                <div class="detail-header">
+                    <h2>📊 Paso 3: Aplanamiento de XMLs</h2>
+                    <div class="detail-tabs">
+                        <button class="detail-tab active" onclick="showTab(3, 'simulator')">Métodos</button>
+                        <button class="detail-tab" onclick="showTab(3, 'code')">Estructura CSV</button>
+                        <button class="detail-tab" onclick="showTab(3, 'docs')">Documentación</button>
+                    </div>
+                </div>
+
+                <div class="detail-content active" id="panel-3-simulator">
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                        El aplanamiento convierte los XMLs jerárquicos en tablas CSV planas. Existen <strong>dos métodos</strong> según el volumen de datos:
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+                        <!-- Método Python -->
+                        <div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                <span style="font-size: 2rem;">🐍</span>
+                                <div>
+                                    <h4 style="color: var(--accent-blue); margin: 0;">Método Python</h4>
+                                    <small style="color: var(--text-muted);">1a.py → 2a.py</small>
+                                </div>
+                            </div>
+                            <ul style="color: var(--text-secondary); padding-left: 1rem; font-size: 0.85rem; margin-bottom: 1rem;">
+                                <li style="margin-bottom: 0.5rem;"><strong>Uso:</strong> &lt; 50,000 CFDIs</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Output:</strong> 1 archivo CSV unificado</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Velocidad:</strong> ~100-500 XMLs/seg</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Ventaja:</strong> Flexible, fácil de modificar</li>
+                                <li><strong>Ruta:</strong> Larga (probada)</li>
+                            </ul>
+                            <span class="status-badge pending">Recomendado para desarrollo</span>
+                        </div>
+
+                        <!-- Método C++ -->
+                        <div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--accent-green);">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                <span style="font-size: 2rem;">⚡</span>
+                                <div>
+                                    <h4 style="color: var(--accent-green); margin: 0;">Método C++</h4>
+                                    <small style="color: var(--text-muted);">cfdi_m038_logic.cpp</small>
+                                </div>
+                            </div>
+                            <ul style="color: var(--text-secondary); padding-left: 1rem; font-size: 0.85rem; margin-bottom: 1rem;">
+                                <li style="margin-bottom: 0.5rem;"><strong>Uso:</strong> &gt; 50,000 CFDIs</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Output:</strong> 25+ archivos CSV especializados</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Velocidad:</strong> ~5,000-10,000 XMLs/seg</li>
+                                <li style="margin-bottom: 0.5rem;"><strong>Ventaja:</strong> Ultra rápido, multihilo</li>
+                                <li><strong>Ruta:</strong> Corta (beta) / Larga</li>
+                            </ul>
+                            <span class="status-badge success">Recomendado para producción</span>
+                        </div>
+                    </div>
+
+                    <h4 style="margin-bottom: 1rem;">📁 Archivos Generados (Método C++)</h4>
+                    <div class="simulator">
+                        <div class="simulator-header">
+                            <div class="simulator-dots">
+                                <span class="simulator-dot red"></span>
+                                <span class="simulator-dot yellow"></span>
+                                <span class="simulator-dot green"></span>
+                            </div>
+                            <span class="simulator-title">Estructura de Salida - 25+ CSVs</span>
+                        </div>
+                        <div class="simulator-body" style="max-height: 300px;">
+                            <div class="sim-line"><span class="sim-prompt">📁</span><span class="sim-output">output/</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  │</span><span class="sim-info">── CFDI Base ──</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_comprobante.csv</span> <span class="sim-info"># Datos generales (UUID, Fecha, Total, etc.)</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_emisor.csv</span> <span class="sim-info"># RFC, Nombre, Régimen del emisor</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_receptor.csv</span> <span class="sim-info"># RFC, Nombre, UsoCFDI del receptor</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_cfdi_relacionados.csv</span> <span class="sim-info"># Documentos relacionados</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  │</span><span class="sim-info">── Conceptos ──</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_concepto.csv</span> <span class="sim-info"># Artículos/servicios facturados</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_concepto_traslado.csv</span> <span class="sim-info"># IVA por concepto</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_concepto_retencion.csv</span> <span class="sim-info"># Retenciones por concepto</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_informacion_aduanera.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_cuenta_predial.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_parte.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  │</span><span class="sim-info">── Impuestos Comprobante ──</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_impuestos_traslado.csv</span> <span class="sim-info"># Totales IVA del comprobante</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_impuestos_retencion.csv</span> <span class="sim-info"># Totales retenciones</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  │</span><span class="sim-warning">── Complemento Pagos (PPD) ──</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-warning">_pagos_pago.csv</span> <span class="sim-info"># Cada pago recibido</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-warning">_pagos_docto.csv</span> <span class="sim-info"># Documentos pagados</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-warning">_pagos_totales.csv</span> <span class="sim-info"># Resumen de pagos</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-warning">_pagos_traslado_p.csv</span> <span class="sim-info"># IVA a nivel pago</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-warning">_pagos_traslado_dr.csv</span> <span class="sim-info"># IVA a nivel documento</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-warning">_pagos_retencion_p.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-warning">_pagos_retencion_dr.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  │</span><span class="sim-info">── Reportes Especiales ──</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_pagos_detalles_pue.csv</span> <span class="sim-info"># Detalles PUE para IVA</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-success">_pagos_detalles_ppd.csv</span> <span class="sim-info"># Detalles PPD para IVA</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  │</span><span class="sim-info">── Impuestos Locales ──</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_retencion_local.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_traslado_local.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  │</span><span class="sim-info">── Complementos Especiales ──</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_nomina_general.csv</span> <span class="sim-info"># Nómina 1.2</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_nomina_empleado.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_nomina_percepciones.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_nomina_deducciones.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_cartaporte_general.csv</span> <span class="sim-info"># Carta Porte 3.0</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  ├──</span><span class="sim-output">_cartaporte_ubicaciones.csv</span></div>
+                            <div class="sim-line"><span class="sim-prompt">  └──</span><span class="sim-success">_ledger.csv</span> <span class="sim-info"># Registro universal (todo)</span></div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="simulateFlatten()" id="btn-flatten" disabled style="margin-top: 1.5rem;">
+                        📊 Simular Aplanamiento
+                    </button>
+                </div>
+
+                <div class="detail-content" id="panel-3-code">
+                    <h4 style="margin-bottom: 1rem;">Estructura de _comprobante.csv</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Campo</th>
+                                <th>Tipo</th>
+                                <th>Descripción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>UUID</td><td>string</td><td>Identificador único del CFDI (llave primaria)</td></tr>
+                            <tr><td>Version</td><td>string</td><td>3.3 o 4.0</td></tr>
+                            <tr><td>Fecha</td><td>date</td><td>Fecha de emisión (YYYY-MM-DD)</td></tr>
+                            <tr><td>FechaDDMMYYYY</td><td>string</td><td>Fecha formateada (DD/MM/YYYY)</td></tr>
+                            <tr><td>TipoDeComprobante</td><td>string</td><td>I=Ingreso, E=Egreso, P=Pago, T=Traslado, N=Nómina</td></tr>
+                            <tr><td>FormaPago</td><td>string</td><td>Código SAT (01=Efectivo, 02=Cheque, 03=Transferencia...)</td></tr>
+                            <tr><td>MetodoPago</td><td>string</td><td><strong>PUE</strong> o <strong>PPD</strong> (crítico para IVA)</td></tr>
+                            <tr><td>SubTotal</td><td>decimal</td><td>Importe antes de impuestos</td></tr>
+                            <tr><td>Descuento</td><td>decimal</td><td>Descuento aplicado</td></tr>
+                            <tr><td>Moneda</td><td>string</td><td>MXN, USD, EUR...</td></tr>
+                            <tr><td>LugarExpedicion</td><td>string</td><td>Código postal</td></tr>
+                            <tr><td>Total</td><td>decimal</td><td>Importe total</td></tr>
+                            <tr><td>TotalTraslados</td><td>decimal</td><td>Total de IVA trasladado</td></tr>
+                            <tr><td>TotalRetenciones</td><td>decimal</td><td>Total de retenciones</td></tr>
+                            <tr><td>RfcEmisor</td><td>string</td><td>RFC de quien emite</td></tr>
+                            <tr><td>RfcReceptor</td><td>string</td><td>RFC de quien recibe</td></tr>
+                        </tbody>
+                    </table>
+
+                    <h4 style="margin: 2rem 0 1rem;">Estructura de _concepto_traslado.csv (IVA por concepto)</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Campo</th>
+                                <th>Tipo</th>
+                                <th>Descripción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>UUID</td><td>string</td><td>Llave foránea al comprobante</td></tr>
+                            <tr><td>ConceptoIndex</td><td>int</td><td>Número de concepto (1, 2, 3...)</td></tr>
+                            <tr><td>LocalIndex</td><td>int</td><td>Índice del impuesto dentro del concepto</td></tr>
+                            <tr><td>ConceptoID</td><td>string</td><td>UUID-ConceptoIndex (llave compuesta)</td></tr>
+                            <tr><td>Impuesto</td><td>string</td><td>001=ISR, <strong>002=IVA</strong>, 003=IEPS</td></tr>
+                            <tr><td>TipoFactor</td><td>string</td><td>Tasa, Cuota, Exento</td></tr>
+                            <tr><td>TasaOCuota</td><td>decimal</td><td>0.160000 (16%), 0.080000 (8%), 0.000000 (0%)</td></tr>
+                            <tr><td>Base</td><td>decimal</td><td>Base gravable</td></tr>
+                            <tr><td>Importe</td><td>decimal</td><td>Monto del impuesto</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="detail-content" id="panel-3-docs">
+                    <h3 style="margin-bottom: 1rem;">📋 ¿Por qué dos métodos?</h3>
+                    
+                    <div class="code-block">
+                        <div class="code-header"><span class="code-lang">Decisión de Método</span></div>
+                        <div class="code-content">
+<span class="keyword">if</span> cantidad_cfdis < <span class="number">50000</span>:
+    <span class="comment"># Usar Python (1a.py + 2a.py)</span>
+    <span class="comment"># - Más flexible para modificaciones</span>
+    <span class="comment"># - Output: 1 CSV unificado</span>
+    <span class="comment"># - Velocidad: ~100-500 XMLs/seg</span>
+    metodo = <span class="string">"python"</span>
+    
+<span class="keyword">else</span>:
+    <span class="comment"># Usar C++ (cfdi_m038_logic.cpp)</span>
+    <span class="comment"># - Ultra rápido con libxml2</span>
+    <span class="comment"># - Output: 25+ CSVs especializados</span>
+    <span class="comment"># - Velocidad: ~5,000-10,000 XMLs/seg</span>
+    metodo = <span class="string">"cpp"</span>
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 1.5rem 0 1rem;">🐍 Flujo Python (1a.py → 2a.py)</h4>
+                    <div class="flow-diagram" style="flex-direction: column; align-items: flex-start;">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                            <div class="flow-node">
+                                <strong>1a.py</strong><br>
+                                <small style="color: var(--text-secondary);">XML → DataFrame largo</small>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-node">
+                                <strong>TEMPZ.csv</strong><br>
+                                <small style="color: var(--text-secondary);">Or, Var, Val, UUID</small>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-node">
+                                <strong>2a.py</strong><br>
+                                <small style="color: var(--text-secondary);">Pivoteo + Mapeo</small>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-node highlight">
+                                <strong>TEMPZ_SUM.csv</strong><br>
+                                <small style="color: var(--text-secondary);">Listo para cálculo</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 1.5rem 0 1rem;">⚡ Flujo C++ (Directo)</h4>
+                    <div class="flow-diagram" style="flex-direction: column; align-items: flex-start;">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div class="flow-node">
+                                <strong>XMLs</strong><br>
+                                <small style="color: var(--text-secondary);">Carpeta de CFDIs</small>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-node highlight">
+                                <strong>cfdi_m038</strong><br>
+                                <small style="color: var(--text-secondary);">libxml2 + multihilo</small>
+                            </div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-node">
+                                <strong>25+ CSVs</strong><br>
+                                <small style="color: var(--text-secondary);">Listos para análisis</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4 style="margin: 1.5rem 0 1rem;">🔑 Índices de Relación</h4>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Los CSVs se relacionan mediante índices jerárquicos:
+                    </p>
+                    <ul style="color: var(--text-secondary); padding-left: 1.5rem; font-size: 0.9rem;">
+                        <li style="margin-bottom: 0.5rem;"><strong>UUID</strong> → Identifica el CFDI (llave principal)</li>
+                        <li style="margin-bottom: 0.5rem;"><strong>ConceptoIndex</strong> → Número de artículo/servicio dentro del CFDI</li>
+                        <li style="margin-bottom: 0.5rem;"><strong>PagoIndex</strong> → Número de pago (para complementos de pago)</li>
+                        <li style="margin-bottom: 0.5rem;"><strong>DoctoIndex</strong> → Número de documento dentro de cada pago</li>
+                        <li><strong>LocalIndex</strong> → Número de impuesto dentro de cada nivel</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Step 4: Cálculo -->
+            <div class="detail-panel" id="panel-4" style="display: none;">
+                <div class="detail-header">
+                    <h2>💰 Paso 4: Cálculo de IVA</h2>
+                    <div class="detail-tabs">
+                        <button class="detail-tab active" onclick="showTab(4, 'simulator')">Resumen</button>
+                        <button class="detail-tab" onclick="showTab(4, 'code')">Scripts</button>
+                        <button class="detail-tab" onclick="showTab(4, 'docs')">Documentación</button>
+                    </div>
+                </div>
+
+                <div class="detail-content active" id="panel-4-simulator">
+                    <!-- Período dinámico -->
+                    <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1rem 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">PERÍODO DE CÁLCULO</div>
+                            <div style="font-size: 1.25rem; font-weight: 600;" id="periodo-calculo">Diciembre 2024 - Enero 2025</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">RFC: <span id="rfc-calculo">AAA010101AAA</span></div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="downloadExcel('trasladado')" style="background: var(--accent-green); font-size: 0.85rem; padding: 0.5rem 1rem;">
+                                📥 IT_Trasladado.xlsx
+                            </button>
+                            <button class="btn btn-primary" onclick="downloadExcel('acreditable')" style="background: var(--accent-blue); font-size: 0.85rem; padding: 0.5rem 1rem;">
+                                📥 IA_Acreditable.xlsx
+                            </button>
+                        </div>
+                    </div>
+
+                    <h4 style="margin-bottom: 1rem;">Resumen de IVA</h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--accent-green);">
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">IVA Trasladado (IT)</div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-green);" id="iva-trasladado">$485,230.00</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">Impuestos_IT.py</div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--accent-blue);">
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">IVA Acreditable (IA)</div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-blue);" id="iva-acreditable">$612,450.00</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">impuestos_v2.py</div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border-left: 4px solid var(--accent-yellow);">
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Saldo</div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-yellow);" id="saldo-iva">-$127,220.00</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;" id="saldo-tipo">SALDO A FAVOR</div>
+                        </div>
+                    </div>
+
+                    <h4 style="margin-bottom: 1rem;">Desglose por Tipo de Pago</h4>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Concepto</th>
+                                <th>PUE</th>
+                                <th>PPD</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>IVA Trasladado (Ventas)</td>
+                                <td style="color: var(--accent-green);" id="it-pue">$320,150.00</td>
+                                <td style="color: var(--accent-green);" id="it-ppd">$165,080.00</td>
+                                <td style="font-weight: 600;" id="it-total">$485,230.00</td>
+                            </tr>
+                            <tr>
+                                <td>IVA Acreditable (Compras)</td>
+                                <td style="color: var(--accent-blue);" id="ia-pue">$412,300.00</td>
+                                <td style="color: var(--accent-blue);" id="ia-ppd">$200,150.00</td>
+                                <td style="font-weight: 600;" id="ia-total">$612,450.00</td>
+                            </tr>
+                            <tr>
+                                <td>Retenciones IVA</td>
+                                <td style="color: var(--accent-purple);" id="ret-iva-pue">$0.00</td>
+                                <td style="color: var(--accent-purple);" id="ret-iva-ppd">$15,230.00</td>
+                                <td style="font-weight: 600;" id="ret-iva-total">$15,230.00</td>
+                            </tr>
+                            <tr>
+                                <td>Retenciones ISR</td>
+                                <td style="color: var(--accent-red);" id="ret-isr-pue">$0.00</td>
+                                <td style="color: var(--accent-red);" id="ret-isr-ppd">$28,450.00</td>
+                                <td style="font-weight: 600;" id="ret-isr-total">$28,450.00</td>
+                            </tr>
+                            <tr style="background: rgba(255, 215, 0, 0.1);">
+                                <td><strong>Saldo IVA</strong></td>
+                                <td style="color: var(--accent-yellow);" id="saldo-pue">-$92,150.00</td>
+                                <td style="color: var(--accent-yellow);" id="saldo-ppd">-$35,070.00</td>
+                                <td style="font-weight: 700; color: var(--accent-yellow);" id="saldo-total">-$127,220.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Alerta de simulación -->
+                    <div style="background: rgba(0, 180, 255, 0.1); border: 1px solid rgba(0, 180, 255, 0.3); border-radius: 8px; padding: 1rem 1.5rem; margin-top: 1.5rem; display: flex; align-items: flex-start; gap: 12px;">
+                        <span style="font-size: 1.25rem;">ℹ️</span>
+                        <div>
+                            <strong style="color: var(--accent-blue);">Datos de simulación</strong>
+                            <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
+                                Estos son datos de ejemplo. Para obtener datos reales, <a href="#descargas" style="color: var(--accent-green);">descarga los scripts</a> y ejecútalos con tus CFDIs.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-content" id="panel-4-code">
+                    <h4 style="margin-bottom: 1rem;">Scripts de Cálculo</h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem;">
+                        <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                <span style="font-size: 2rem;">📊</span>
+                                <div>
+                                    <h5 style="margin: 0;">Impuestos_IT.py</h5>
+                                    <span style="font-size: 0.8rem; color: var(--accent-green);">IVA Trasladado</span>
+                                </div>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                                Calcula el IVA trasladado (ventas) separando PUE y PPD. Genera reporte Excel con desglose por concepto.
+                            </p>
+                            <ul style="color: var(--text-secondary); font-size: 0.8rem; padding-left: 1rem; margin-bottom: 1rem;">
+                                <li>Lee: TODOMETADATA + MergedData</li>
+                                <li>Procesa: Facturas emitidas</li>
+                                <li>Salida: IT_exc_RFC.xlsx</li>
+                            </ul>
+                        </div>
+
+                        <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                <span style="font-size: 2rem;">💰</span>
+                                <div>
+                                    <h5 style="margin: 0;">impuestos_v2.py</h5>
+                                    <span style="font-size: 0.8rem; color: var(--accent-blue);">IVA Acreditable + Retenciones</span>
+                                </div>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                                Calcula el IVA acreditable (compras) y retenciones (IVA, ISR, IL). Incluye validación de tipos de cambio.
+                            </p>
+                            <ul style="color: var(--text-secondary); font-size: 0.8rem; padding-left: 1rem; margin-bottom: 1rem;">
+                                <li>Lee: TODOMETADATA + MergedData</li>
+                                <li>Procesa: Facturas recibidas</li>
+                                <li>Salida: IA_exc_RFC.xlsx</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div class="code-header"><span class="code-lang">Python - Columnas del reporte</span></div>
+                        <div class="code-content">
+columnas = [
+    <span class="string">"LF"</span>, <span class="string">"T_A"</span>, <span class="string">"PPD_PUE"</span>, <span class="string">"CFDI_P"</span>, <span class="string">"SERIE"</span>, <span class="string">"FOLIO"</span>, <span class="string">"TipoComp"</span>, <span class="string">"METODOPAGO"</span>,
+    <span class="string">"RFC_E"</span>, <span class="string">"NOM_E"</span>, <span class="string">"RFC_R"</span>, <span class="string">"NOM_R"</span>, <span class="string">"FechaDePago"</span>, <span class="string">"FechaE"</span>, <span class="string">"CLAVE_SAT"</span>,
+    <span class="string">"DESC"</span>, <span class="string">"DES_SAT"</span>, <span class="string">"PORC"</span>, <span class="string">"MONEDADR"</span>, <span class="string">"TC"</span>, <span class="string">"TC_CFDI"</span>, <span class="string">"Sub_Mo_CDscto"</span>, <span class="string">"NO_AFECTO"</span>, <span class="string">"IVA_PAG"</span>,
+    <span class="string">"Val_MXN"</span>, <span class="string">"NO_AFECTO_MXN"</span>, <span class="string">"IVA_PAGO_MXN"</span>, <span class="string">"IVA_RET"</span>, <span class="string">"ISR_RET"</span>, <span class="string">"IL_RET"</span>, <span class="string">"REG_F"</span>, <span class="string">"Tasa"</span>,
+    <span class="string">"TIPORELACION"</span>, <span class="string">"Desc_TR"</span>, <span class="string">"UUID_Rel"</span>, <span class="string">"FechaE_SUST"</span>, <span class="string">"FORMADEPAGOP"</span>,
+    <span class="string">"DescFDP"</span>, <span class="string">"Uso"</span>, <span class="string">"Year"</span>, <span class="string">"Mes"</span>
+]
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-content" id="panel-4-docs">
+                    <h3 style="margin-bottom: 1rem;">📋 PUE vs PPD: La Diferencia Clave</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                        <div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px;">
+                            <h4 style="color: var(--accent-green); margin-bottom: 1rem;">PUE - Pago en Una Exhibición</h4>
+                            <ul style="color: var(--text-secondary); padding-left: 1rem; font-size: 0.9rem;">
+                                <li style="margin-bottom: 0.5rem;">Pago inmediato o en máximo 30 días</li>
+                                <li style="margin-bottom: 0.5rem;">IVA se acredita en el mes de la factura</li>
+                                <li style="margin-bottom: 0.5rem;">No requiere complemento de pago</li>
+                                <li>Más simple de procesar</li>
+                            </ul>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px;">
+                            <h4 style="color: var(--accent-blue); margin-bottom: 1rem;">PPD - Pago en Parcialidades/Diferido</h4>
+                            <ul style="color: var(--text-secondary); padding-left: 1rem; font-size: 0.9rem;">
+                                <li style="margin-bottom: 0.5rem;">Pago después de 30 días o en partes</li>
+                                <li style="margin-bottom: 0.5rem;">IVA se acredita cuando se paga</li>
+                                <li style="margin-bottom: 0.5rem;">Requiere complemento de pago (REP)</li>
+                                <li>Más complejo pero más flexible</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <h4 style="margin-bottom: 1rem;">⏰ Plazos de Recuperación</h4>
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                        Según el artículo 146 del CFF, el derecho a solicitar devolución de IVA prescribe en <strong>5 años</strong> 
+                        contados a partir del día siguiente al vencimiento del plazo para presentar la declaración del periodo.
+                    </p>
+                    
+                    <div class="code-block">
+                        <div class="code-header"><span class="code-lang">Ejemplo de Cálculo de Vencimiento</span></div>
+                        <div class="code-content">
+IVA a favor de: <span class="string">Febrero 2021</span>
+Declaración mensual vence: <span class="string">17 de Marzo 2021</span>
+Prescripción (5 años): <span class="string">17 de Marzo 2026</span>
+
+<span class="comment">// El contribuyente tiene hasta el 17 de marzo de 2026</span>
+<span class="comment">// para solicitar la devolución de ese saldo a favor</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN DE DESCARGAS -->
+        <section id="descargas" style="padding: 4rem 2rem; background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%); border-top: 1px solid var(--border-color);">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <h2 class="section-title" style="color: #ff6b35;">⬇️ Descargar Scripts</h2>
+                <p style="color: var(--text-secondary); max-width: 700px; margin-bottom: 1.5rem;">
+                    Descarga los scripts de Python para ejecutar el proceso completo en tu máquina. 
+                    Tu FIEL nunca sale de tu computadora - total seguridad.
+                </p>
+
+                <div style="background: rgba(255, 215, 0, 0.1); border: 1px solid rgba(255, 215, 0, 0.3); border-radius: 8px; padding: 1rem 1.5rem; margin-bottom: 2rem; display: flex; align-items: flex-start; gap: 12px;">
+                    <span style="font-size: 1.25rem;">⚠️</span>
+                    <div>
+                        <strong style="color: var(--accent-yellow);">Requisito: Python 3.8 o superior</strong>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">Si no tienes Python instalado, ve a la sección de <a href="#instalacion" style="color: var(--accent-green);">Instalación</a> primero.</p>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+                    <!-- Script Principal -->
+                    <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; transition: all 0.3s;" onmouseover="this.style.borderColor='#ff6b35'; this.style.boxShadow='0 0 20px rgba(255, 107, 53, 0.3)';" onmouseout="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
+                        <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem;">sat_descarga_demo.py</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Script principal para descargar CFDIs del SAT con tu FIEL</p>
+                        <ul style="list-style: none; margin-bottom: 1.5rem;">
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Conexión real al SAT</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Descarga Metadata o XMLs</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Emitidos y Recibidos</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Guarda configuración</li>
+                            <li style="padding: 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary);">✓ Interfaz en terminal</li>
+                        </ul>
+                        <a href="downloads/sat_descarga_demo.py" download class="btn btn-primary" style="background: linear-gradient(135deg, #ff6b35, #ff4757); width: 100%; text-align: center;">
+                            ⬇️ Descargar Script
+                        </a>
+                    </div>
+
+                    <!-- Aplanador -->
+                    <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; opacity: 0.6;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+                        <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem;">aplanar_cfdi.py</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Convierte XMLs a tablas CSV para análisis</p>
+                        <ul style="list-style: none; margin-bottom: 1.5rem;">
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Extrae todos los campos</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Genera CSVs estructurados</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Soporta CFDI 3.3 y 4.0</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Complementos de pago</li>
+                            <li style="padding: 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary);">✓ Alta velocidad</li>
+                        </ul>
+                        <button class="btn btn-secondary" disabled style="width: 100%;">🔜 Próximamente</button>
+                    </div>
+
+                    <!-- Calculador -->
+                    <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 16px; padding: 2rem; opacity: 0.6;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">💰</div>
+                        <h3 style="font-size: 1.25rem; margin-bottom: 0.5rem;">calcular_iva.py</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Calcula IVA trasladado, acreditable y saldo</p>
+                        <ul style="list-style: none; margin-bottom: 1.5rem;">
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Separa PUE y PPD</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Calcula por período</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Genera reportes Excel</li>
+                            <li style="padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; color: var(--text-secondary);">✓ Identifica saldo a favor</li>
+                            <li style="padding: 0.5rem 0; font-size: 0.85rem; color: var(--text-secondary);">✓ Listo para declaración</li>
+                        </ul>
+                        <button class="btn btn-secondary" disabled style="width: 100%;">🔜 Próximamente</button>
+                    </div>
+                </div>
+
+                <!-- Requirements -->
+                <div style="margin-top: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">📦 Dependencias (requirements.txt)</h3>
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="code-lang">requirements.txt</span>
+                            <a href="downloads/requirements.txt" download style="padding: 0.25rem 0.5rem; background: transparent; border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary); font-size: 0.75rem; text-decoration: none;">Descargar</a>
+                        </div>
+                        <div class="code-content">
+cfdiclient>=1.5.0
+lxml>=4.9.0
+cryptography>=41.0.0
+requests>=2.31.0
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN DE INSTALACIÓN -->
+        <section id="instalacion" style="padding: 4rem 2rem; max-width: 1200px; margin: 0 auto;">
+            <h2 class="section-title">🛠️ Guía de Instalación</h2>
+
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="showInstall('windows')" id="tab-windows" style="background: var(--accent-blue);">Windows</button>
+                <button class="btn btn-secondary" onclick="showInstall('mac')" id="tab-mac">macOS</button>
+                <button class="btn btn-secondary" onclick="showInstall('linux')" id="tab-linux">Linux/WSL</button>
+            </div>
+
+            <div id="install-windows">
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">1</div>
+                    <h4>Instalar Python</h4>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">Descarga Python desde <a href="https://www.python.org/downloads/" target="_blank" style="color: var(--accent-blue);">python.org</a>. Marca <strong>"Add Python to PATH"</strong>.</p>
+                </div>
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">2</div>
+                    <h4>Instalar dependencias</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">CMD</span></div><div class="code-content">pip install cfdiclient lxml cryptography requests</div></div>
+                </div>
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">3</div>
+                    <h4>Ejecutar el script</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">CMD</span></div><div class="code-content">python sat_descarga_demo.py</div></div>
+                </div>
+            </div>
+
+            <div id="install-mac" style="display: none;">
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">1</div>
+                    <h4>Verificar Python</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">Terminal</span></div><div class="code-content">python3 --version</div></div>
+                </div>
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">2</div>
+                    <h4>Instalar dependencias</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">Terminal</span></div><div class="code-content">pip3 install cfdiclient lxml cryptography requests</div></div>
+                </div>
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">3</div>
+                    <h4>Ejecutar</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">Terminal</span></div><div class="code-content">python3 sat_descarga_demo.py</div></div>
+                </div>
+            </div>
+
+            <div id="install-linux" style="display: none;">
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">1</div>
+                    <h4>Instalar Python</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">Bash</span></div><div class="code-content">sudo apt update && sudo apt install python3 python3-pip -y</div></div>
+                </div>
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">2</div>
+                    <h4>Instalar dependencias</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">Bash</span></div><div class="code-content">pip3 install cfdiclient lxml cryptography requests --break-system-packages</div></div>
+                </div>
+                <div style="position: relative; padding-left: 3rem; margin-bottom: 2rem;">
+                    <div style="position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; background: var(--accent-blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">3</div>
+                    <h4>Ejecutar</h4>
+                    <div class="code-block"><div class="code-header"><span class="code-lang">Bash</span></div><div class="code-content">python3 sat_descarga_demo.py</div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN SANDBOX - PRUEBAS CON DATOS REALES -->
+        <section id="sandbox" style="padding: 4rem 2rem; background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);">
+            <div style="max-width: 1200px; margin: 0 auto;">
+                <h2 class="section-title">🧪 Sandbox - Prueba el Sistema</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem; max-width: 800px;">
+                    Prueba el flujo completo con datos de ejemplo o sube tus propios CFDIs para ver los resultados en tiempo real.
+                </p>
+
+                <!-- Tabs del Sandbox -->
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="showSandboxTab('datos-ejemplo')" id="tab-datos-ejemplo">
+                        📦 Datos de Ejemplo
+                    </button>
+                    <button class="btn btn-secondary" onclick="showSandboxTab('subir-cfdi')" id="tab-subir-cfdi">
+                        📤 Subir mis CFDIs
+                    </button>
+                    <button class="btn btn-secondary" onclick="showSandboxTab('metadata-viewer')" id="tab-metadata-viewer">
+                        📊 Visor de Metadata
+                    </button>
+                    <button class="btn btn-secondary" onclick="showSandboxTab('repositorio')" id="tab-repositorio">
+                        🗄️ Mi Repositorio
+                    </button>
+                </div>
+
+                <!-- Tab: Datos de Ejemplo -->
+                <div id="sandbox-datos-ejemplo" class="sandbox-content" style="display: block;">
+                    <div class="detail-panel">
+                        <div class="detail-header">
+                            <h3 style="font-size: 1.1rem;">📦 Descarga Datos de Ejemplo</h3>
+                        </div>
+                        <div style="padding: 1.5rem;">
+                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                                Estos paquetes contienen CFDIs de ejemplo para que puedas probar todo el flujo sin necesidad de conectarte al SAT.
+                            </p>
+
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                                <!-- Paquete Metadata -->
+                                <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                        <span style="font-size: 2rem;">📋</span>
+                                        <div>
+                                            <h4 style="margin: 0;">Metadata de Ejemplo</h4>
+                                            <small style="color: var(--text-muted);">metadata_ejemplo_2025.csv</small>
+                                        </div>
+                                    </div>
+                                    <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1rem; margin-bottom: 1rem;">
+                                        <li>1,000 registros de metadata</li>
+                                        <li>Período: Enero 2025</li>
+                                        <li>Incluye PUE y PPD</li>
+                                        <li>Formato CSV con timestamp</li>
+                                    </ul>
+                                    <button class="btn btn-primary" onclick="downloadSampleData('metadata')" style="width: 100%;">
+                                        ⬇️ Descargar (45 KB)
+                                    </button>
+                                </div>
+
+                                <!-- Paquete XMLs -->
+                                <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                        <span style="font-size: 2rem;">📁</span>
+                                        <div>
+                                            <h4 style="margin: 0;">CFDIs de Ejemplo</h4>
+                                            <small style="color: var(--text-muted);">cfdi_ejemplo_2025.zip</small>
+                                        </div>
+                                    </div>
+                                    <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1rem; margin-bottom: 1rem;">
+                                        <li>50 archivos XML</li>
+                                        <li>Tipos: I, E, P (Ingresos, Egresos, Pagos)</li>
+                                        <li>Incluye complementos de pago</li>
+                                        <li>Versión CFDI 4.0</li>
+                                    </ul>
+                                    <button class="btn btn-primary" onclick="downloadSampleData('cfdi')" style="width: 100%;">
+                                        ⬇️ Descargar (120 KB)
+                                    </button>
+                                </div>
+
+                                <!-- Paquete Aplanado -->
+                                <div style="background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                        <span style="font-size: 2rem;">📊</span>
+                                        <div>
+                                            <h4 style="margin: 0;">CSVs Aplanados</h4>
+                                            <small style="color: var(--text-muted);">aplanado_ejemplo_2025.zip</small>
+                                        </div>
+                                    </div>
+                                    <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1rem; margin-bottom: 1rem;">
+                                        <li>25+ archivos CSV</li>
+                                        <li>Resultado del proceso C++</li>
+                                        <li>Listos para cálculo de IVA</li>
+                                        <li>Incluye _ledger.csv</li>
+                                    </ul>
+                                    <button class="btn btn-primary" onclick="downloadSampleData('aplanado')" style="width: 100%;">
+                                        ⬇️ Descargar (85 KB)
+                                    </button>
+                                </div>
+
+                                <!-- Paquete Completo -->
+                                <div style="background: var(--bg-tertiary); border: 1px solid var(--accent-green); border-radius: 12px; padding: 1.5rem; box-shadow: var(--glow-green);">
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
+                                        <span style="font-size: 2rem;">🎁</span>
+                                        <div>
+                                            <h4 style="margin: 0; color: var(--accent-green);">Paquete Completo</h4>
+                                            <small style="color: var(--text-muted);">tax_recovery_demo.zip</small>
+                                        </div>
+                                    </div>
+                                    <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 1rem; margin-bottom: 1rem;">
+                                        <li>✅ Metadata + CFDIs + Aplanados</li>
+                                        <li>✅ Scripts Python (1a.py, 2a.py)</li>
+                                        <li>✅ Ejecutable C++ (Windows)</li>
+                                        <li>✅ README con instrucciones</li>
+                                    </ul>
+                                    <button class="btn btn-primary" onclick="downloadSampleData('completo')" style="width: 100%; background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));">
+                                        ⬇️ Descargar Todo (2.5 MB)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Subir CFDIs -->
+                <div id="sandbox-subir-cfdi" class="sandbox-content" style="display: none;">
+                    <div class="detail-panel">
+                        <div class="detail-header">
+                            <h3 style="font-size: 1.1rem;">📤 Sube tus CFDIs para Análisis</h3>
+                        </div>
+                        <div style="padding: 1.5rem;">
+                            <div id="drop-zone" style="border: 2px dashed var(--border-color); border-radius: 12px; padding: 3rem; text-align: center; cursor: pointer; transition: all 0.3s;" 
+                                 ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="document.getElementById('file-input').click()">
+                                <input type="file" id="file-input" multiple accept=".xml,.zip" style="display: none;" onchange="handleFileSelect(event)">
+                                <div style="font-size: 3rem; margin-bottom: 1rem;">📂</div>
+                                <h4 style="margin-bottom: 0.5rem;">Arrastra tus archivos aquí</h4>
+                                <p style="color: var(--text-secondary); font-size: 0.9rem;">o haz clic para seleccionar</p>
+                                <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 1rem;">Acepta: .xml, .zip (máx. 50 MB)</p>
+                            </div>
+
+                            <!-- Lista de archivos subidos -->
+                            <div id="uploaded-files" style="margin-top: 1.5rem; display: none;">
+                                <h4 style="margin-bottom: 1rem;">📁 Archivos Cargados</h4>
+                                <div id="file-list" style="max-height: 200px; overflow-y: auto;"></div>
+                                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                                    <button class="btn btn-primary" onclick="processUploadedFiles()">
+                                        ⚡ Procesar Archivos
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="clearUploadedFiles()">
+                                        🗑️ Limpiar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Resultados del procesamiento -->
+                            <div id="process-results" style="margin-top: 1.5rem; display: none;">
+                                <h4 style="margin-bottom: 1rem;">📊 Resultados del Análisis</h4>
+                                <div class="simulator">
+                                    <div class="simulator-header">
+                                        <div class="simulator-dots">
+                                            <span class="simulator-dot red"></span>
+                                            <span class="simulator-dot yellow"></span>
+                                            <span class="simulator-dot green"></span>
+                                        </div>
+                                        <span class="simulator-title">Resumen de CFDIs</span>
+                                    </div>
+                                    <div class="simulator-body" id="results-output"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Visor de Metadata -->
+                <div id="sandbox-metadata-viewer" class="sandbox-content" style="display: none;">
+                    <div class="detail-panel">
+                        <div class="detail-header">
+                            <h3 style="font-size: 1.1rem;">📊 Visor de Metadata con Timestamp</h3>
+                        </div>
+                        <div style="padding: 1.5rem;">
+                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                                Visualiza y analiza archivos de metadata descargados del SAT. El timestamp indica cuándo se generó el archivo.
+                            </p>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                                <div class="form-group">
+                                    <label class="form-label">Subir Metadata CSV</label>
+                                    <input type="file" class="form-input" accept=".csv" onchange="loadMetadataFile(event)" style="padding: 0.5rem;">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">O usar ejemplo</label>
+                                    <button class="btn btn-secondary" onclick="loadExampleMetadata()" style="width: 100%;">
+                                        📋 Cargar Metadata de Ejemplo
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Tabla de Metadata -->
+                            <div id="metadata-table-container" style="display: none;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                    <div>
+                                        <span style="color: var(--accent-green); font-weight: 600;" id="metadata-count">0</span>
+                                        <span style="color: var(--text-secondary);"> registros cargados</span>
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <input type="text" class="form-input" placeholder="🔍 Buscar UUID, RFC..." id="metadata-search" oninput="filterMetadata()" style="width: 250px;">
+                                        <select class="form-input" id="metadata-filter" onchange="filterMetadata()" style="width: 150px;">
+                                            <option value="">Todos los tipos</option>
+                                            <option value="I">Ingreso</option>
+                                            <option value="E">Egreso</option>
+                                            <option value="P">Pago</option>
+                                            <option value="N">Nómina</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style="overflow-x: auto; max-height: 400px; border: 1px solid var(--border-color); border-radius: 8px;">
+                                    <table class="data-table" id="metadata-table">
+                                        <thead>
+                                            <tr>
+                                                <th>UUID</th>
+                                                <th>RFC Emisor</th>
+                                                <th>RFC Receptor</th>
+                                                <th>Tipo</th>
+                                                <th>Fecha</th>
+                                                <th>Total</th>
+                                                <th>Método</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="metadata-tbody"></tbody>
+                                    </table>
+                                </div>
+                                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                                    <button class="btn btn-primary" onclick="exportMetadataFiltered()">
+                                        📥 Exportar Filtrado
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="saveToRepository('metadata')">
+                                        🗄️ Guardar en Repositorio
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Repositorio -->
+                <div id="sandbox-repositorio" class="sandbox-content" style="display: none;">
+                    <div class="detail-panel">
+                        <div class="detail-header">
+                            <h3 style="font-size: 1.1rem;">🗄️ Mi Repositorio Local</h3>
+                        </div>
+                        <div style="padding: 1.5rem;">
+                            <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">
+                                Guarda tus archivos procesados localmente. Los datos se almacenan en tu navegador y puedes exportarlos en cualquier momento.
+                            </p>
+
+                            <div id="repo-stats" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                                <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-green);" id="repo-metadata-count">0</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Metadatas</div>
+                                </div>
+                                <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-blue);" id="repo-cfdi-count">0</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">CFDIs</div>
+                                </div>
+                                <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-yellow);" id="repo-csv-count">0</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">CSVs</div>
+                                </div>
+                                <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: var(--accent-purple);" id="repo-size">0 KB</div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Tamaño</div>
+                                </div>
+                            </div>
+
+                            <!-- Lista de archivos en repositorio -->
+                            <div id="repo-files" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 1rem;">
+                                <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+                                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📭</div>
+                                    <p>Tu repositorio está vacío</p>
+                                    <p style="font-size: 0.85rem;">Procesa archivos o descarga ejemplos para comenzar</p>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                                <button class="btn btn-primary" onclick="exportRepository()">
+                                    📦 Exportar Todo (.zip)
+                                </button>
+                                <button class="btn btn-secondary" onclick="syncToGitHub()">
+                                    <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" style="width: 16px; height: 16px; margin-right: 6px; filter: invert(1);">
+                                    Sincronizar con GitHub
+                                </button>
+                                <button class="btn btn-secondary" onclick="clearRepository()" style="color: var(--accent-red);">
+                                    🗑️ Limpiar Repositorio
+                                </button>
+                            </div>
+
+                            <!-- Configuración de GitHub -->
+                            <div id="github-config" style="margin-top: 2rem; padding: 1.5rem; background: var(--bg-tertiary); border-radius: 12px; display: none;">
+                                <h4 style="margin-bottom: 1rem;">⚙️ Configurar Repositorio GitHub</h4>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">Usuario GitHub</label>
+                                        <input type="text" class="form-input" id="github-user" placeholder="tu-usuario">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Repositorio</label>
+                                        <input type="text" class="form-input" id="github-repo" placeholder="tax-data">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Token (opcional)</label>
+                                        <input type="password" class="form-input" id="github-token" placeholder="ghp_xxxx...">
+                                    </div>
+                                </div>
+                                <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.5rem;">
+                                    💡 Sin token, se abrirá la página de GitHub para subir manualmente. Con token, la sincronización es automática.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECCIÓN FAQ -->
+        <section id="faq" style="padding: 4rem 2rem; background: var(--bg-secondary); border-top: 1px solid var(--border-color);">
+            <div style="max-width: 900px; margin: 0 auto;">
+                <h2 class="section-title">❓ Preguntas Frecuentes</h2>
+
+                <div style="border-bottom: 1px solid var(--border-color);">
+                    <button onclick="this.parentElement.classList.toggle('open')" style="width: 100%; padding: 1.5rem 0; background: none; border: none; color: var(--text-primary); font-size: 1rem; font-weight: 500; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                        ¿Es seguro usar mi FIEL con este script?
+                        <span style="font-size: 1.5rem;">+</span>
+                    </button>
+                    <div style="max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                        <p style="padding-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.7;">
+                            <strong>Sí, es completamente seguro.</strong> El script se ejecuta localmente en tu computadora. Tus archivos .cer, .key y contraseña nunca salen de tu máquina. El código es abierto y puedes revisarlo antes de ejecutarlo.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="border-bottom: 1px solid var(--border-color);">
+                    <button onclick="this.parentElement.classList.toggle('open')" style="width: 100%; padding: 1.5rem 0; background: none; border: none; color: var(--text-primary); font-size: 1rem; font-weight: 500; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                        ¿Cuántos CFDIs puedo descargar?
+                        <span style="font-size: 1.5rem;">+</span>
+                    </button>
+                    <div style="max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                        <p style="padding-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.7;">
+                            El SAT permite hasta <strong>200,000 XMLs</strong> por solicitud de CFDI, o <strong>1,000,000 de registros</strong> por solicitud de Metadata. El script divide automáticamente períodos largos.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="border-bottom: 1px solid var(--border-color);">
+                    <button onclick="this.parentElement.classList.toggle('open')" style="width: 100%; padding: 1.5rem 0; background: none; border: none; color: var(--text-primary); font-size: 1rem; font-weight: 500; text-align: left; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                        ¿Funciona en Windows, Mac y Linux?
+                        <span style="font-size: 1.5rem;">+</span>
+                    </button>
+                    <div style="max-height: 0; overflow: hidden; transition: max-height 0.3s;">
+                        <p style="padding-bottom: 1.5rem; color: var(--text-secondary); font-size: 0.9rem; line-height: 1.7;">
+                            <strong>Sí, funciona en los tres sistemas operativos.</strong> Solo necesitas tener Python 3.8 o superior instalado.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer style="display: none;">
+        <p>Sistema de Recuperación de IVA - Demo Interactivo</p>
+        <p style="margin-top: 0.5rem;">
+            Desarrollado para <a href="#">srexcel.github.io/tax</a> | 
+            Basado en <a href="#">cfdiclient</a> y SAT Descarga Masiva v1.5
+        </p>
+    </footer>
+
+    <script>
+        // =====================================================
+        // CONFIGURACIÓN DE ACCESO - CAMBIAR ESTAS CREDENCIALES
+        // =====================================================
+        const AUTH_CONFIG = {
+            // Credenciales válidas (puedes agregar más)
+            credentials: [
+                { user: 'cesar', password: 'tax2025' },
+                { user: 'admin', password: 'recovery$' },
+                { user: 'demo', password: 'demo123' }
+            ],
+            // Clave para sessionStorage
+            sessionKey: 'tax_recovery_auth',
+            // Duración de sesión en horas
+            sessionHours: 24
+        };
+
+        // =====================================================
+        // SISTEMA DE AUTENTICACIÓN
+        // =====================================================
+        
+        function checkSession() {
+            const session = sessionStorage.getItem(AUTH_CONFIG.sessionKey);
+            if (session) {
+                try {
+                    const data = JSON.parse(session);
+                    const now = new Date().getTime();
+                    const sessionAge = now - data.timestamp;
+                    const maxAge = AUTH_CONFIG.sessionHours * 60 * 60 * 1000;
+                    
+                    if (sessionAge < maxAge) {
+                        showApp();
+                        return true;
+                    }
+                } catch (e) {
+                    sessionStorage.removeItem(AUTH_CONFIG.sessionKey);
+                }
+            }
+            return false;
+        }
+
+        function attemptLogin(event) {
+            event.preventDefault();
+            
+            const user = document.getElementById('login-user').value.trim().toLowerCase();
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+            
+            // Verificar credenciales
+            const validUser = AUTH_CONFIG.credentials.find(
+                cred => cred.user.toLowerCase() === user && cred.password === password
+            );
+            
+            if (validUser) {
+                // Guardar sesión
+                const sessionData = {
+                    user: validUser.user,
+                    timestamp: new Date().getTime()
+                };
+                sessionStorage.setItem(AUTH_CONFIG.sessionKey, JSON.stringify(sessionData));
+                
+                // Mostrar app
+                showApp();
+            } else {
+                // Mostrar error
+                errorDiv.style.display = 'block';
+                document.getElementById('login-password').value = '';
+                document.getElementById('login-password').focus();
+                
+                // Ocultar error después de 3 segundos
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function showApp() {
+            // 1. Ocultar el login con !important
+            document.getElementById('login-overlay').style.setProperty('display', 'none', 'important');
+            
+            // 2. Mostrar TODO el contenido que estaba oculto
+            document.querySelector('header').style.display = 'block';
+            document.querySelector('main').style.display = 'block';
+            document.querySelector('footer').style.display = 'block';
+            
+            // 3. Inicializar el primer paso del simulador
+            if(typeof selectStep === 'function') selectStep(1);
+            
+            console.log("Acceso concedido");
+        }
+
+        function logout() {
+            sessionStorage.removeItem(AUTH_CONFIG.sessionKey);
+            location.reload();
+        }
+
+        // Verificar sesión al cargar
+        document.addEventListener('DOMContentLoaded', () => {
+            // Ocultar contenido principal inicialmente
+            document.querySelector('header').style.display = 'none';
+            document.querySelector('main').style.display = 'none';
+            document.querySelector('footer').style.display = 'none';
+            
+            // Verificar si ya tiene sesión
+            if (!checkSession()) {
+                document.getElementById('login-user').focus();
+            }
+        });
+
+        // =====================================================
+        // LÓGICA DEL DEMO
+        // =====================================================
+        
+        // State management - DEBE estar antes de DOMContentLoaded
+        let isAuthenticated = false;
+        let downloadComplete = false;
+        let currentStep = 1;
+
+        function selectStep(step) {
+            // Update cards
+            document.querySelectorAll('.process-card').forEach((card, idx) => {
+                card.classList.remove('active');
+                if (idx + 1 === step) card.classList.add('active');
+            });
+
+            // Show corresponding panel
+            for (let i = 1; i <= 4; i++) {
+                const panel = document.getElementById(`panel-${i}`);
+                if (panel) {
+                    panel.style.display = i === step ? 'block' : 'none';
+                }
+            }
+
+            currentStep = step;
+        }
+        
+        // Inicializar después de que todo cargue
+        window.addEventListener('load', function() {
+            selectStep(1);
+            updatePeriodoCalculo();
+        });
+
+        // Actualiza el período en el panel de cálculo IVA
+        function updatePeriodoCalculo() {
+            const startDate = document.getElementById('date-start');
+            const endDate = document.getElementById('date-end');
+            const rfcInput = document.getElementById('rfc-input');
+            
+            if (startDate && endDate) {
+                const start = new Date(startDate.value);
+                const end = new Date(endDate.value);
+                
+                const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                              'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                
+                const periodoText = `${meses[start.getMonth()]} ${start.getFullYear()} - ${meses[end.getMonth()]} ${end.getFullYear()}`;
+                
+                const periodoEl = document.getElementById('periodo-calculo');
+                if (periodoEl) periodoEl.textContent = periodoText;
+            }
+            
+            if (rfcInput) {
+                const rfcEl = document.getElementById('rfc-calculo');
+                if (rfcEl) rfcEl.textContent = rfcInput.value || 'AAA010101AAA';
+            }
+        }
+
+        // Función para simular descarga de Excel
+        function downloadExcel(tipo) {
+            const rfc = document.getElementById('rfc-input')?.value || 'DEMO';
+            const startDate = document.getElementById('date-start')?.value || '2024-12-01';
+            const endDate = document.getElementById('date-end')?.value || '2025-01-11';
+            
+            let filename, content;
+            
+            if (tipo === 'trasladado') {
+                filename = `IT_exc_${rfc}_${startDate}_${endDate}.csv`;
+                content = generateITData();
+            } else {
+                filename = `IA_exc_${rfc}_${startDate}_${endDate}.csv`;
+                content = generateIAData();
+            }
+            
+            // Crear blob y descargar
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Genera datos de ejemplo para IVA Trasladado
+        function generateITData() {
+            const headers = 'LF,T_A,PPD_PUE,CFDI_P,SERIE,FOLIO,TipoComp,METODOPAGO,RFC_E,NOM_E,RFC_R,NOM_R,FechaDePago,FechaE,CLAVE_SAT,DESC,Sub_Mo_CDscto,IVA_PAG,Val_MXN,IVA_PAGO_MXN,Year,Mes\n';
+            const rows = [
+                'E,A,PUE,ABC123,A,1001,I,PUE,AAA010101AAA,EMPRESA DEMO,PROV123456789,PROVEEDOR 1,2025-01-15,2025-01-15,84111506,Servicios profesionales,50000,8000,50000,8000,2025,1',
+                'E,A,PUE,DEF456,A,1002,I,PUE,AAA010101AAA,EMPRESA DEMO,PROV987654321,PROVEEDOR 2,2025-01-20,2025-01-20,43232408,Licencias software,120000,19200,120000,19200,2025,1',
+                'E,A,PPD,GHI789,B,2001,P,PPD,AAA010101AAA,EMPRESA DEMO,PROV456789123,PROVEEDOR 3,2025-01-25,2025-01-10,84111506,Consultoría,80000,12800,80000,12800,2025,1',
+            ];
+            return headers + rows.join('\n');
+        }
+
+        // Genera datos de ejemplo para IVA Acreditable
+        function generateIAData() {
+            const headers = 'LF,T_A,PPD_PUE,CFDI_P,SERIE,FOLIO,TipoComp,METODOPAGO,RFC_E,NOM_E,RFC_R,NOM_R,FechaDePago,FechaE,CLAVE_SAT,DESC,Sub_Mo_CDscto,IVA_PAG,Val_MXN,IVA_PAGO_MXN,IVA_RET,ISR_RET,Year,Mes\n';
+            const rows = [
+                'R,A,PUE,XYZ111,C,3001,I,PUE,PROV111222333,PROVEEDOR ALPHA,AAA010101AAA,EMPRESA DEMO,2025-01-10,2025-01-10,84111506,Servicios contables,100000,16000,100000,16000,1066.67,10000,2025,1',
+                'R,A,PUE,XYZ222,C,3002,I,PUE,PROV444555666,PROVEEDOR BETA,AAA010101AAA,EMPRESA DEMO,2025-01-12,2025-01-12,43232408,Equipo cómputo,250000,40000,250000,40000,0,0,2025,1',
+                'R,A,PPD,XYZ333,D,4001,P,PPD,PROV777888999,PROVEEDOR GAMMA,AAA010101AAA,EMPRESA DEMO,2025-01-28,2025-01-05,84111506,Asesoría legal,75000,12000,75000,12000,800,7500,2025,1',
+            ];
+            return headers + rows.join('\n');
+        }
+
+        // Observar cambios en fechas para actualizar período
+        document.addEventListener('DOMContentLoaded', function() {
+            const startDate = document.getElementById('date-start');
+            const endDate = document.getElementById('date-end');
+            const rfcInput = document.getElementById('rfc-input');
+            
+            if (startDate) startDate.addEventListener('change', updatePeriodoCalculo);
+            if (endDate) endDate.addEventListener('change', updatePeriodoCalculo);
+            if (rfcInput) rfcInput.addEventListener('change', updatePeriodoCalculo);
+            
+            // Inicializar repositorio local
+            initRepository();
+        });
+
+        // =====================================================
+        // SANDBOX - FUNCIONES PRINCIPALES
+        // =====================================================
+
+        function showSandboxTab(tabName) {
+            // Ocultar todos los contenidos
+            document.querySelectorAll('.sandbox-content').forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            // Mostrar el seleccionado
+            const content = document.getElementById(`sandbox-${tabName}`);
+            if (content) content.style.display = 'block';
+            
+            // Actualizar botones
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            });
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('btn-secondary');
+                activeBtn.classList.add('btn-primary');
+            }
+        }
+
+        // =====================================================
+        // DESCARGA DE DATOS DE EJEMPLO
+        // =====================================================
+
+        function downloadSampleData(tipo) {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            let filename, content;
+
+            switch(tipo) {
+                case 'metadata':
+                    filename = `metadata_ejemplo_${timestamp}.csv`;
+                    content = generateSampleMetadata();
+                    break;
+                case 'cfdi':
+                    filename = `cfdi_ejemplo_${timestamp}.xml`;
+                    content = generateSampleCFDI();
+                    break;
+                case 'aplanado':
+                    filename = `comprobante_${timestamp}.csv`;
+                    content = generateSampleComprobante();
+                    break;
+                case 'completo':
+                    downloadCompletePackage();
+                    return;
+            }
+
+            downloadFile(filename, content);
+        }
+
+        function generateSampleMetadata() {
+            const header = 'UUID,RfcEmisor,NombreEmisor,RfcReceptor,NombreReceptor,FechaEmision,FechaCertificacionSAT,Total,SubTotal,EfectoComprobante,TipoComprobante,MetodoPago,FormaPago,Moneda,TipoCambio,Estado\n';
+            const rows = [];
+            
+            const rfcEmisores = ['AAA010101AAA', 'BBB020202BBB', 'CCC030303CCC'];
+            const rfcReceptores = ['XXX111111XXX', 'YYY222222YYY', 'ZZZ333333ZZZ'];
+            const tipos = ['I', 'I', 'I', 'E', 'P'];
+            const metodos = ['PUE', 'PPD'];
+            const formas = ['01', '02', '03', '04', '99'];
+            
+            for (let i = 0; i < 100; i++) {
+                const uuid = generateUUID();
+                const rfcE = rfcEmisores[i % 3];
+                const rfcR = rfcReceptores[i % 3];
+                const fecha = randomDate(new Date(2025, 0, 1), new Date(2025, 0, 31));
+                const total = (Math.random() * 100000 + 1000).toFixed(2);
+                const subtotal = (total / 1.16).toFixed(2);
+                const tipo = tipos[i % 5];
+                const metodo = tipo === 'P' ? 'PPD' : metodos[i % 2];
+                const forma = formas[i % 5];
+                
+                rows.push(`${uuid},${rfcE},EMPRESA ${rfcE},${rfcR},CLIENTE ${rfcR},${fecha}T12:00:00,${fecha}T12:01:00,${total},${subtotal},I,${tipo},${metodo},${forma},MXN,1,Vigente`);
+            }
+            
+            return header + rows.join('\n');
+        }
+
+        function generateSampleCFDI() {
+            const uuid = generateUUID();
+            const fecha = new Date().toISOString().slice(0, 19);
+            
+            return `<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" 
+                  xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital"
+                  Version="4.0" 
+                  Fecha="${fecha}"
+                  Serie="A" Folio="1001"
+                  FormaPago="03" 
+                  MetodoPago="PUE"
+                  TipoDeComprobante="I"
+                  SubTotal="10000.00"
+                  Descuento="0.00"
+                  Moneda="MXN"
+                  Total="11600.00"
+                  LugarExpedicion="06600">
+    
+    <cfdi:Emisor Rfc="AAA010101AAA" Nombre="EMPRESA DEMO SA DE CV" RegimenFiscal="601"/>
+    
+    <cfdi:Receptor Rfc="XXX111111XXX" Nombre="CLIENTE EJEMPLO" 
+                   DomicilioFiscalReceptor="01000" 
+                   RegimenFiscalReceptor="601" 
+                   UsoCFDI="G03"/>
+    
+    <cfdi:Conceptos>
+        <cfdi:Concepto ClaveProdServ="84111506" 
+                       NoIdentificacion="SERV001"
+                       Cantidad="1" 
+                       ClaveUnidad="E48" 
+                       Unidad="Servicio"
+                       Descripcion="Servicios profesionales de consultoría"
+                       ValorUnitario="10000.00" 
+                       Importe="10000.00"
+                       ObjetoImp="02">
+            <cfdi:Impuestos>
+                <cfdi:Traslados>
+                    <cfdi:Traslado Base="10000.00" 
+                                   Impuesto="002" 
+                                   TipoFactor="Tasa" 
+                                   TasaOCuota="0.160000" 
+                                   Importe="1600.00"/>
+                </cfdi:Traslados>
+            </cfdi:Impuestos>
+        </cfdi:Concepto>
+    </cfdi:Conceptos>
+    
+    <cfdi:Impuestos TotalImpuestosTrasladados="1600.00">
+        <cfdi:Traslados>
+            <cfdi:Traslado Base="10000.00" 
+                           Impuesto="002" 
+                           TipoFactor="Tasa" 
+                           TasaOCuota="0.160000" 
+                           Importe="1600.00"/>
+        </cfdi:Traslados>
+    </cfdi:Impuestos>
+    
+    <cfdi:Complemento>
+        <tfd:TimbreFiscalDigital Version="1.1"
+                                  UUID="${uuid}"
+                                  FechaTimbrado="${fecha}"
+                                  SelloCFD="..."
+                                  NoCertificadoSAT="00001000000123456789"
+                                  SelloSAT="..."/>
+    </cfdi:Complemento>
+</cfdi:Comprobante>`;
+        }
+
+        function generateSampleComprobante() {
+            const header = 'UUID,Version,Fecha,FechaDDMMYYYY,TipoDeComprobante,FormaPago,MetodoPago,SubTotal,Descuento,Moneda,LugarExpedicion,Total,TotalTraslados,TotalRetenciones,RfcEmisor,RfcReceptor\n';
+            const rows = [];
+            
+            for (let i = 0; i < 50; i++) {
+                const uuid = generateUUID();
+                const fecha = randomDate(new Date(2025, 0, 1), new Date(2025, 0, 31));
+                const total = (Math.random() * 100000 + 1000).toFixed(2);
+                const subtotal = (total / 1.16).toFixed(2);
+                const iva = (total - subtotal).toFixed(2);
+                const tipo = ['I', 'I', 'I', 'E', 'P'][i % 5];
+                const metodo = tipo === 'P' ? 'PPD' : ['PUE', 'PPD'][i % 2];
+                
+                rows.push(`${uuid},4.0,${fecha},${formatDateDDMMYYYY(fecha)},${tipo},03,${metodo},${subtotal},0.00,MXN,06600,${total},${iva},0.00,AAA010101AAA,XXX111111XXX`);
+            }
+            
+            return header + rows.join('\n');
+        }
+
+        function downloadCompletePackage() {
+            alert('🎁 El paquete completo incluye:\\n\\n• metadata_ejemplo.csv\\n• 50 archivos XML de ejemplo\\n• CSVs aplanados\\n• Scripts Python\\n• Ejecutable C++ (Windows)\\n• README.md\\n\\nEn un entorno real, esto descargaría un archivo ZIP de ~2.5 MB.\\n\\nPor ahora, descarga los componentes individuales.');
+        }
+
+        // =====================================================
+        // SUBIR Y PROCESAR ARCHIVOS
+        // =====================================================
+
+        let uploadedFiles = [];
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.style.borderColor = 'var(--accent-green)';
+            e.currentTarget.style.background = 'rgba(0, 255, 157, 0.05)';
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            e.currentTarget.style.borderColor = 'var(--border-color)';
+            e.currentTarget.style.background = 'transparent';
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            handleDragLeave(e);
+            const files = Array.from(e.dataTransfer.files);
+            addFiles(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = Array.from(e.target.files);
+            addFiles(files);
+        }
+
+        function addFiles(files) {
+            const validFiles = files.filter(f => 
+                f.name.endsWith('.xml') || f.name.endsWith('.zip')
+            );
+            
+            uploadedFiles = [...uploadedFiles, ...validFiles];
+            updateFileList();
+        }
+
+        function updateFileList() {
+            const container = document.getElementById('uploaded-files');
+            const list = document.getElementById('file-list');
+            
+            if (uploadedFiles.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            list.innerHTML = uploadedFiles.map((f, i) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span>${f.name.endsWith('.xml') ? '📄' : '📦'}</span>
+                        <span>${f.name}</span>
+                        <span style="color: var(--text-muted); font-size: 0.8rem;">(${formatBytes(f.size)})</span>
+                    </div>
+                    <button onclick="removeFile(${i})" style="background: none; border: none; color: var(--accent-red); cursor: pointer;">✕</button>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            updateFileList();
+        }
+
+        function clearUploadedFiles() {
+            uploadedFiles = [];
+            updateFileList();
+            document.getElementById('process-results').style.display = 'none';
+        }
+
+        function processUploadedFiles() {
+            if (uploadedFiles.length === 0) return;
+            
+            const resultsDiv = document.getElementById('process-results');
+            const output = document.getElementById('results-output');
+            
+            resultsDiv.style.display = 'block';
+            output.innerHTML = '';
+            
+            // Simular procesamiento
+            const lines = [
+                { text: `📂 Procesando ${uploadedFiles.length} archivo(s)...`, class: '' },
+                { text: `✅ ${uploadedFiles.filter(f => f.name.endsWith('.xml')).length} archivos XML detectados`, class: 'sim-success' },
+                { text: `✅ ${uploadedFiles.filter(f => f.name.endsWith('.zip')).length} archivos ZIP detectados`, class: 'sim-success' },
+            ];
+            
+            // Análisis simulado
+            let totalIngresos = Math.floor(Math.random() * 50) + 10;
+            let totalEgresos = Math.floor(Math.random() * 20) + 5;
+            let totalPagos = Math.floor(Math.random() * 30) + 5;
+            let totalIVA = (Math.random() * 100000 + 10000).toFixed(2);
+            
+            lines.push(
+                { text: `📊 Analizando estructura XML...`, class: 'sim-info' },
+                { text: `   Ingresos (I): ${totalIngresos}`, class: '' },
+                { text: `   Egresos (E): ${totalEgresos}`, class: '' },
+                { text: `   Pagos (P): ${totalPagos}`, class: '' },
+                { text: `💰 IVA total detectado: $${Number(totalIVA).toLocaleString()}`, class: 'sim-warning' },
+                { text: `✅ Procesamiento completado`, class: 'sim-success' }
+            );
+            
+            lines.forEach((line, i) => {
+                setTimeout(() => {
+                    const div = document.createElement('div');
+                    div.className = 'sim-line';
+                    div.innerHTML = `<span class="sim-prompt">${i === 0 ? '$' : ' '}</span><span class="${line.class || 'sim-output'}">${line.text}</span>`;
+                    output.appendChild(div);
+                    output.scrollTop = output.scrollHeight;
+                }, i * 300);
+            });
+        }
+
+        // =====================================================
+        // VISOR DE METADATA
+        // =====================================================
+
+        let metadataData = [];
+
+        function loadMetadataFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                parseMetadataCSV(event.target.result);
+            };
+            reader.readAsText(file);
+        }
+
+        function loadExampleMetadata() {
+            const csv = generateSampleMetadata();
+            parseMetadataCSV(csv);
+        }
+
+        function parseMetadataCSV(csv) {
+            const lines = csv.trim().split('\n');
+            const headers = lines[0].split(',');
+            
+            metadataData = lines.slice(1).map(line => {
+                const values = line.split(',');
+                const obj = {};
+                headers.forEach((h, i) => obj[h] = values[i] || '');
+                return obj;
+            });
+            
+            document.getElementById('metadata-count').textContent = metadataData.length;
+            document.getElementById('metadata-table-container').style.display = 'block';
+            
+            renderMetadataTable(metadataData);
+        }
+
+        function renderMetadataTable(data) {
+            const tbody = document.getElementById('metadata-tbody');
+            tbody.innerHTML = data.slice(0, 100).map(row => `
+                <tr>
+                    <td style="font-family: monospace; font-size: 0.75rem;">${(row.UUID || '').slice(0, 8)}...</td>
+                    <td>${row.RfcEmisor || ''}</td>
+                    <td>${row.RfcReceptor || ''}</td>
+                    <td><span class="status-badge ${row.TipoComprobante === 'I' ? 'success' : row.TipoComprobante === 'P' ? 'pending' : ''}">${row.TipoComprobante || ''}</span></td>
+                    <td>${row.FechaEmision ? row.FechaEmision.slice(0, 10) : ''}</td>
+                    <td style="text-align: right;">$${Number(row.Total || 0).toLocaleString()}</td>
+                    <td><span class="status-badge ${row.MetodoPago === 'PUE' ? 'success' : 'pending'}">${row.MetodoPago || ''}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function filterMetadata() {
+            const search = document.getElementById('metadata-search').value.toLowerCase();
+            const typeFilter = document.getElementById('metadata-filter').value;
+            
+            const filtered = metadataData.filter(row => {
+                const matchSearch = !search || 
+                    (row.UUID || '').toLowerCase().includes(search) ||
+                    (row.RfcEmisor || '').toLowerCase().includes(search) ||
+                    (row.RfcReceptor || '').toLowerCase().includes(search);
+                
+                const matchType = !typeFilter || row.TipoComprobante === typeFilter;
+                
+                return matchSearch && matchType;
+            });
+            
+            document.getElementById('metadata-count').textContent = filtered.length;
+            renderMetadataTable(filtered);
+        }
+
+        function exportMetadataFiltered() {
+            const search = document.getElementById('metadata-search').value.toLowerCase();
+            const typeFilter = document.getElementById('metadata-filter').value;
+            
+            let filtered = metadataData;
+            if (search || typeFilter) {
+                filtered = metadataData.filter(row => {
+                    const matchSearch = !search || 
+                        (row.UUID || '').toLowerCase().includes(search) ||
+                        (row.RfcEmisor || '').toLowerCase().includes(search);
+                    const matchType = !typeFilter || row.TipoComprobante === typeFilter;
+                    return matchSearch && matchType;
+                });
+            }
+            
+            const headers = Object.keys(filtered[0] || {}).join(',');
+            const rows = filtered.map(row => Object.values(row).join(','));
+            const csv = headers + '\n' + rows.join('\n');
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            downloadFile(`metadata_filtrado_${timestamp}.csv`, csv);
+        }
+
+        // =====================================================
+        // REPOSITORIO LOCAL
+        // =====================================================
+
+        function initRepository() {
+            updateRepositoryStats();
+        }
+
+        function updateRepositoryStats() {
+            // En un entorno real, esto leería de localStorage o IndexedDB
+            const stats = JSON.parse(localStorage.getItem('taxRepoStats') || '{"metadata":0,"cfdi":0,"csv":0,"size":0}');
+            
+            document.getElementById('repo-metadata-count').textContent = stats.metadata;
+            document.getElementById('repo-cfdi-count').textContent = stats.cfdi;
+            document.getElementById('repo-csv-count').textContent = stats.csv;
+            document.getElementById('repo-size').textContent = formatBytes(stats.size);
+        }
+
+        function saveToRepository(type) {
+            const stats = JSON.parse(localStorage.getItem('taxRepoStats') || '{"metadata":0,"cfdi":0,"csv":0,"size":0}');
+            
+            if (type === 'metadata' && metadataData.length > 0) {
+                stats.metadata += 1;
+                stats.size += metadataData.length * 200; // Estimación
+            }
+            
+            localStorage.setItem('taxRepoStats', JSON.stringify(stats));
+            updateRepositoryStats();
+            
+            alert(`✅ Guardado en repositorio local\\n\\nPuedes exportar todos tus archivos en la pestaña "Mi Repositorio"`);
+        }
+
+        function exportRepository() {
+            alert('📦 Exportando repositorio...\\n\\nEsta función crearía un archivo ZIP con todos tus datos guardados.');
+        }
+
+        function syncToGitHub() {
+            const config = document.getElementById('github-config');
+            config.style.display = config.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function clearRepository() {
+            if (confirm('¿Estás seguro de que quieres limpiar todo el repositorio?')) {
+                localStorage.removeItem('taxRepoStats');
+                updateRepositoryStats();
+            }
+        }
+
+        // =====================================================
+        // UTILIDADES
+        // =====================================================
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16).toUpperCase();
+            });
+        }
+
+        function randomDate(start, end) {
+            const date = new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+            return date.toISOString().slice(0, 10);
+        }
+
+        function formatDateDDMMYYYY(dateStr) {
+            const [y, m, d] = dateStr.split('-');
+            return `${d}/${m}/${y}`;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function showTab(step, tabName) {
+            // Update tab buttons
+            const panel = document.getElementById(`panel-${step}`);
+            panel.querySelectorAll('.detail-tab').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.textContent.toLowerCase().includes(tabName.substring(0, 4))) {
+                    tab.classList.add('active');
+                }
+            });
+
+            // Show tab content
+            ['simulator', 'code', 'docs'].forEach(name => {
+                const content = document.getElementById(`panel-${step}-${name}`);
+                if (content) {
+                    content.classList.remove('active');
+                    if (name === tabName) content.classList.add('active');
+                }
+            });
+        }
+
+        function simulateAuth() {
+            const btn = document.getElementById('btn-auth');
+            const output = document.getElementById('auth-output');
+            const rfc = document.getElementById('rfc-input').value;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Autenticando...';
+            output.innerHTML = '';
+
+            const lines = [
+                { delay: 0, prompt: '$', text: `Iniciando autenticación para RFC: ${rfc}`, class: '' },
+                { delay: 500, prompt: '📖', text: 'Leyendo archivos FIEL...', class: '' },
+                { delay: 1000, prompt: '✅', text: 'Certificado leído: 1666 bytes', class: 'sim-success' },
+                { delay: 1300, prompt: '✅', text: 'Clave privada leída: 1298 bytes', class: 'sim-success' },
+                { delay: 1800, prompt: '🔑', text: 'Creando objeto FIEL...', class: '' },
+                { delay: 2200, prompt: '✅', text: 'FIEL creada exitosamente', class: 'sim-success' },
+                { delay: 2600, prompt: '🔐', text: 'Obteniendo autenticación del SAT...', class: '' },
+                { delay: 3500, prompt: '✅', text: 'TOKEN obtenido exitosamente', class: 'sim-success' },
+                { delay: 4000, prompt: '🔐', text: 'TOKEN: eyJhbGciOiJodHRwOi8vd3d3LnczLm9yZy8yMDAxLzA0L3htbGRzaWctbW9yZSNo...', class: 'sim-info' },
+                { delay: 4500, prompt: '✅', text: '¡AUTENTICACIÓN EXITOSA!', class: 'sim-success' },
+            ];
+
+            lines.forEach((line, idx) => {
+                setTimeout(() => {
+                    const div = document.createElement('div');
+                    div.className = 'sim-line';
+                    div.style.animationDelay = '0s';
+                    div.innerHTML = `
+                        <span class="sim-prompt">${line.prompt}</span>
+                        <span class="${line.class || 'sim-output'}">${line.text}</span>
+                    `;
+                    output.appendChild(div);
+                    output.scrollTop = output.scrollHeight;
+                }, line.delay);
+            });
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '✅ Autenticado';
+                btn.classList.add('btn-secondary');
+                btn.classList.remove('btn-primary');
+                isAuthenticated = true;
+                
+                // Enable download button
+                document.getElementById('btn-download').disabled = false;
+                document.getElementById('download-output').innerHTML = `
+                    <div class="sim-line">
+                        <span class="sim-prompt">✅</span>
+                        <span class="sim-success">Autenticación completada. Puedes iniciar la descarga.</span>
+                    </div>
+                `;
+                
+                // Update step 1 status
+                document.querySelector('[data-step="1"] .process-status').innerHTML = '✅ Completado';
+            }, 5000);
+        }
+
+        function simulateDownload() {
+            const btn = document.getElementById('btn-download');
+            const output = document.getElementById('download-output');
+            const progressContainer = document.getElementById('download-progress');
+            const progressFill = document.getElementById('progress-fill');
+            const progressPercent = document.getElementById('progress-percent');
+            
+            const dateStart = document.getElementById('date-start').value;
+            const dateEnd = document.getElementById('date-end').value;
+            const downloadType = document.getElementById('download-type').value;
+            const cfdiType = document.getElementById('cfdi-type').value;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Descargando...';
+            output.innerHTML = '';
+            progressContainer.style.display = 'block';
+
+            const lines = [
+                { delay: 0, prompt: '$', text: `Iniciando descarga: ${dateStart} → ${dateEnd}`, class: '' },
+                { delay: 500, prompt: '📋', text: `Tipo: ${downloadType} | CFDIs: ${cfdiType === 'RECEIVED' ? 'Recibidos' : 'Emitidos'}`, class: 'sim-info' },
+                { delay: 1000, prompt: '📤', text: 'Enviando solicitud al SAT...', class: '' },
+                { delay: 2000, prompt: '✅', text: 'Solicitud aceptada. ID: 8a7b9c2d-1234-5678-abcd-ef0123456789', class: 'sim-success' },
+                { delay: 3000, prompt: '⏳', text: 'Verificando estado de solicitud...', class: '' },
+                { delay: 4000, prompt: '⏳', text: '[Estado: 2] SAT procesando solicitud...', class: 'sim-warning' },
+                { delay: 6000, prompt: '✅', text: '[Estado: 3] ¡Paquetes listos para descarga!', class: 'sim-success' },
+                { delay: 7000, prompt: '📦', text: 'SAT reporta 3 paquete(s) disponibles', class: 'sim-info' },
+                { delay: 8000, prompt: '📥', text: '[1/3] Descargando paquete abc123...', class: '' },
+                { delay: 9500, prompt: '💾', text: 'Guardado: abc123.zip (2.4 MB) - 847 XMLs', class: 'sim-success' },
+                { delay: 10500, prompt: '📥', text: '[2/3] Descargando paquete def456...', class: '' },
+                { delay: 12000, prompt: '💾', text: 'Guardado: def456.zip (1.8 MB) - 623 XMLs', class: 'sim-success' },
+                { delay: 13000, prompt: '📥', text: '[3/3] Descargando paquete ghi789...', class: '' },
+                { delay: 14500, prompt: '💾', text: 'Guardado: ghi789.zip (890 KB) - 312 XMLs', class: 'sim-success' },
+                { delay: 15500, prompt: '✅', text: '¡DESCARGA COMPLETADA! Total: 1,782 CFDIs', class: 'sim-success' },
+            ];
+
+            // Progress animation
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 2;
+                if (progress > 100) progress = 100;
+                progressFill.style.width = `${progress}%`;
+                progressPercent.textContent = `${progress}%`;
+                if (progress >= 100) clearInterval(progressInterval);
+            }, 300);
+
+            lines.forEach((line) => {
+                setTimeout(() => {
+                    const div = document.createElement('div');
+                    div.className = 'sim-line';
+                    div.innerHTML = `
+                        <span class="sim-prompt">${line.prompt}</span>
+                        <span class="${line.class || 'sim-output'}">${line.text}</span>
+                    `;
+                    output.appendChild(div);
+                    output.scrollTop = output.scrollHeight;
+                }, line.delay);
+            });
+
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '✅ Descarga Completa';
+                btn.classList.add('btn-secondary');
+                btn.classList.remove('btn-primary');
+                downloadComplete = true;
+                
+                // Enable flatten button
+                document.getElementById('btn-flatten').disabled = false;
+                
+                // Update step 2 status
+                document.querySelector('[data-step="2"] .process-status').innerHTML = '✅ Completado';
+            }, 16000);
+        }
+
+        function simulateFlatten() {
+            // Simply mark as complete and move to next step
+            document.querySelector('[data-step="3"] .process-status').innerHTML = '✅ Completado';
+            selectStep(4);
+        }
+
+        function copyCode(button) {
+            const codeBlock = button.closest('.code-block');
+            const code = codeBlock.querySelector('.code-content').textContent;
+            navigator.clipboard.writeText(code);
+            button.textContent = '¡Copiado!';
+            setTimeout(() => button.textContent = 'Copiar', 2000);
+        }
+
+        function showInstall(os) {
+            // Hide all install sections
+            document.getElementById('install-windows').style.display = 'none';
+            document.getElementById('install-mac').style.display = 'none';
+            document.getElementById('install-linux').style.display = 'none';
+            
+            // Show selected
+            document.getElementById('install-' + os).style.display = 'block';
+            
+            // Update tabs
+            document.getElementById('tab-windows').classList.remove('btn-primary');
+            document.getElementById('tab-windows').classList.add('btn-secondary');
+            document.getElementById('tab-windows').style.background = '';
+            document.getElementById('tab-mac').classList.remove('btn-primary');
+            document.getElementById('tab-mac').classList.add('btn-secondary');
+            document.getElementById('tab-mac').style.background = '';
+            document.getElementById('tab-linux').classList.remove('btn-primary');
+            document.getElementById('tab-linux').classList.add('btn-secondary');
+            document.getElementById('tab-linux').style.background = '';
+            
+            document.getElementById('tab-' + os).classList.remove('btn-secondary');
+            document.getElementById('tab-' + os).classList.add('btn-primary');
+            document.getElementById('tab-' + os).style.background = 'var(--accent-blue)';
+        }
+
+        // FAQ toggle with CSS
+        document.head.insertAdjacentHTML('beforeend', `
+            <style>
+                .open > div { max-height: 500px !important; }
+                .open button span:last-child { transform: rotate(45deg); }
+            </style>
+        `);
+    </script>
+</body>
+</html>
