@@ -1,0 +1,163 @@
+================================================================================
+  ETX TAX RECOVERY — RESUMEN DE SESIÓN
+  Fecha: Marzo 2026
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. BADGES DE TIPO MÁS DESCRIPTIVOS (main.js)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Funciones afectadas: renderRow() y renderGroupRow()
+
+ANTES:
+  - Solo mostraba "CFDI" o "Metadata" como badge genérico
+
+AHORA:
+  - "CFDI Recibidos"     → azul   (bg-primary)  + ícono arrow-circle-down
+  - "CFDI Emitidos"      → verde  (bg-success)   + ícono arrow-circle-up
+  - "Metadata Recibidos" → cyan   (bg-info)       + ícono arrow-circle-down
+  - "Metadata Emitidos"  → gris   (bg-secondary)  + ícono arrow-circle-up
+
+Lógica:
+  - tipo_solicitud  → determina si es "CFDI" o "Metadata"
+  - tipo_comprobante → "RECEIVED" = Recibidos / "ISSUED" = Emitidos
+  - Si no hay tipo_comprobante → muestra solo el tipo base sin dirección
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. RFC EN HEADER DEL PASO 2 — REDISEÑO (index.html + styles.css)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ANTES:
+  - El RFC era un bloque cuadrado suelto en el CENTRO del header
+  - Quedaba entre el título y los tabs (desordenado visualmente)
+
+AHORA:
+  - Clase .step2-title-row envuelve el <h2> y el chip RFC en columna flex
+  - El chip RFC aparece DEBAJO del título "Paso 2 · Descarga de CFDIs"
+  - Es una pastilla compacta redondeada (border-radius: 2rem)
+  - Formato: [🪪 icono] [RFC activo:] [MESP980407UD4]
+  - Al autenticarse: borde y fondo se vuelven verdes (clase .rfc-activo)
+  - Los tabs quedan solos a la derecha del header
+
+Clases CSS nuevas/modificadas:
+  - .step2-title-row   → columna flex con gap
+  - .step2-rfc-chip    → pastilla inline-flex redondeada
+  - .step2-rfc-chip.rfc-activo → versión verde al autenticar
+  - #step2-rfc-value   → 0.85rem, verde, monospace
+  - #step2-rfc-value.empty → gris, sin autenticar
+
+JS (main.js) — sin cambios, sigue usando:
+  - getElementById('step2-rfc-display') → agrega/quita clase rfc-activo
+  - getElementById('step2-rfc-value')   → muestra el RFC o "Sin autenticar"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. TABLA HISTORIAL — RFC EN COLUMNA SEPARADA (index.html + main.js)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ANTES:
+  - Columna fusionada "ID · RFC" con RFC en segunda línea dentro del mismo <td>
+
+AHORA:
+  - Columna "ID"  → solo el badge del ID de solicitud truncado
+  - Columna "RFC" → solo el código RFC en <code> independiente
+  - Estructura final: [☐] [ID] [RFC] [Fechas] [Tipo] [Estado] [Paquetes] [Acción]
+
+Cambios en renderRow():
+  - Se dividió el <td> fusionado en dos <td> independientes
+
+Cambios en renderGroupRow():
+  - Celda ID: solo "Proceso #N" con el chevron ˅
+  - Celda RFC: solo el código RFC en <code>
+  - Badge de TIPO: movido a la columna Tipo (ya no mezclado con ID)
+  - La columna Tipo ya no muestra "Lote" genérico, muestra el badge descriptivo
+
+Colspans actualizados:
+  - Todos los colspan="7" → colspan="8" en main.js
+  (filas de loading, error, vacío, clientes)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. ARCHIVOS MODIFICADOS EN ESTA SESIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  js/main.js
+    - renderRow(): badges descriptivos + columnas ID/RFC separadas
+    - renderGroupRow(): badges descriptivos + columnas ID/RFC separadas
+                        + badge de tipo movido a columna Tipo
+    - Todos los colspan de 7 → 8
+
+  index.html
+    - Header Paso 2: reestructurado con .step2-title-row y .step2-rfc-chip
+    - Encabezado tabla: "ID · RFC" → dos <th> separados: "ID" y "RFC"
+
+  css/styles.css
+    - Eliminadas clases: .step2-rfc-col, .step2-rfc-col.rfc-activo
+    - Nuevas clases: .step2-title-row, .step2-rfc-chip, .step2-rfc-chip.rfc-activo
+    - Ajustes de tamaño: RFC value de 1rem → 0.85rem
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. PLAN DE DESPLIEGUE EN SYNOLOGY DS1522+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NAS: Synology DiskStation DS1522+ (AMD Ryzen R1600, 5 bahías)
+URL actual DSM: https://code-b.us1.quickconnect.to/
+Internet: IP dinámica (internet de caja)
+
+SITUACIÓN ACTUAL:
+  - El sistema se inicia manualmente con INICIAR_SISTEMA.bat en Windows
+  - Problema: hay que iniciarlo cada vez que se apaga el servidor
+
+SOLUCIÓN PLANIFICADA — Docker Compose en el NAS:
+  - 3 contenedores: MySQL + Node.js Backend + Nginx (frontend)
+  - restart: always → arranque automático al encender el NAS
+  - El NAS está encendido 24/7, no requiere intervención manual
+
+Archivos a crear en el NAS:
+  - /volume1/docker/etx-tax/docker-compose.yml
+  - /volume1/docker/etx-tax/nginx.conf
+  - /volume1/docker/etx-tax/backend/Dockerfile
+
+Acceso externo planificado:
+  - DDNS gratuito Synology: code-b.synology.me
+  - Reverse Proxy en DSM: HTTPS → puerto 80 del contenedor Nginx
+
+PENDIENTE:
+  - Confirmar permisos del usuario en el NAS (¿admin o limitado?)
+  - El admin del NAS debe instalar Container Manager
+  - Subir el proyecto via File Station
+  - Ejecutar docker compose up -d
+
+SOLUCIÓN TEMPORAL (mientras se migra al NAS):
+  - Windows Programador de tareas → ejecutar INICIAR_SISTEMA.bat al inicio
+  - Panel de Control Windows → Programador de tareas → Al iniciar el equipo
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. ESTADO GENERAL DEL PROYECTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Stack: Node.js/Express (puerto 3000) + MySQL (puerto 3307) + Vanilla JS
+DB: IVATAXRECOVERY en MySQL
+Proyecto: C:\xampp\htdocs\ETX\Tax\
+
+Módulos activos:
+  ✅ Autenticación SAT (e.Firma)
+  ✅ Descarga CFDIs (solicitud, verificación, descarga)
+  ✅ Historial de solicitudes con filtros
+  ✅ Dashboard Fiscal
+  ✅ Conciliación bancaria (Estados de Cuenta)
+  ✅ Gestión de usuarios (admin)
+  ✅ Auditoría
+
+Módulos removidos de la UI (código backend existe pero ocultos):
+  ✗ Contabilidad
+  ✗ DIOT/ISR
+  ✗ Activos Fijos
+  ✗ Estados Financieros
+  ✗ Papelera
+
+Pendiente crítico:
+  ⚠ Ejecutar migración SQL:
+    mysql -u root -p IVATAXRECOVERY < backend/migrations/nuevas_funcionalidades.sql
+
+================================================================================
+  FIN DEL RESUMEN
+================================================================================

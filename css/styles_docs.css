@@ -1,0 +1,170 @@
+
+/* Documentation Module Styles */
+.docs-card {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.docs-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 200px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.02));
+    pointer-events: none;
+}
+
+.docs-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.docs-icon {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: var(--accent-blue);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.docs-header h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.docs-header p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.components-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.component-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all 0.3s;
+}
+
+.component-item:hover {
+    border-color: var(--accent-blue);
+    transform: translateY(-2px);
+    background: rgba(0, 180, 255, 0.05);
+}
+
+.comp-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-green);
+}
+
+.comp-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.comp-info strong {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.comp-info span {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Timeline Styles */
+.docs-timeline {
+    padding: 1rem 0;
+}
+
+.docs-timeline h4 {
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.timeline-item {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.timeline-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 19px; /* Half of marker width (38px) approx */
+    top: 38px;
+    bottom: -20px;
+    width: 2px;
+    background: var(--border-color);
+}
+
+.timeline-marker {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--text-secondary);
+    z-index: 1;
+    flex-shrink: 0;
+}
+
+.timeline-item.success .timeline-marker {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+    background: rgba(0, 255, 157, 0.1);
+}
+
+.timeline-content strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--accent-blue);
+}
+
+.timeline-content p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}

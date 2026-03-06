@@ -1,0 +1,22 @@
+# =====================================================
+# TaxRecovery SAT - Apache Config
+# =====================================================
+
+Options -Indexes
+RewriteEngine On
+
+# ─── PROXY: /ETX/Tax/api/* → Node.js :3000/api/* ────
+# Requiere: mod_proxy + mod_proxy_http + mod_rewrite
+<IfModule mod_rewrite.c>
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^api/(.*)$ http://localhost:3000/api/$1 [P,L]
+</IfModule>
+
+# ─── No cachear respuestas de la API ────────────────
+<IfModule mod_headers.c>
+    <FilesMatch "\.(json)$">
+        Header always set Cache-Control "no-store, no-cache, must-revalidate"
+        Header always set Pragma "no-cache"
+    </FilesMatch>
+</IfModule>

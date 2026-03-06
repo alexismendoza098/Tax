@@ -1,0 +1,28 @@
+# ── Dependencias ──────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Variables de entorno (NUNCA subir al repo) ─────────────────────────────────
+.env
+.env.local
+.env.production
+
+# ── Certificados FIEL — datos sensibles del contribuyente ──────────────────────
+uploads/certs/
+uploads/temp/
+
+# ── ZIPs descargados del SAT (archivos grandes, temporales) ────────────────────
+downloads/
+
+# ── Logs PM2 ──────────────────────────────────────────────────────────────────
+logs/
+
+# ── Sistema operativo ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editores ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo

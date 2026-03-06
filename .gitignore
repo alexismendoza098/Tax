@@ -1,0 +1,55 @@
+# ── Dependencias backend ──────────────────────────────────────────────────────
+backend/node_modules/
+
+# ── Variables de entorno ───────────────────────────────────────────────────────
+backend/.env
+backend/.env.local
+backend/.env.production
+
+# ── Certificados FIEL — NUNCA al repositorio ──────────────────────────────────
+backend/uploads/certs/
+backend/uploads/temp/
+
+# ── Extensiones de certificados: bloqueo global en todo el repo ───────────────
+*.cer
+*.key
+*.fiel
+*.pfx
+*.p12
+
+# ── Descargas SAT (archivos grandes) ──────────────────────────────────────────
+backend/downloads/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+backend/logs/
+
+# ── Sistema operativo ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editores ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Claude worktrees (repos embebidos) ────────────────────────────────────────
+.claude/worktrees/
+
+# ── Python bytecode ───────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Binarios compilados C# ────────────────────────────────────────────────────
+backend/csharp/**/bin/
+backend/csharp/**/obj/
+
+# ── Archivos temporales de descarga ───────────────────────────────────────────
+backend/temp_descargas*.txt
+
+# ── Uploads temporales (archivos procesados, no datos de usuario) ─────────────
+backend/uploads/temp_flatten/
+backend/uploads/certs/
+backend/uploads/temp/

@@ -1,0 +1,459 @@
+/* ================================================================
+   ESTADOS DE CUENTA BANCARIOS — ETX Tax Recovery
+   ================================================================ */
+
+/* ─── Panel principal ─────────────────────────────────────────── */
+#estados-cuenta {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.ec-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* ─── Header ──────────────────────────────────────────────────── */
+.ec-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1.5rem 1.75rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+}
+
+.ec-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.ec-icon {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+.ec-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.ec-subtitle {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin: 0.2rem 0 0;
+}
+
+.ec-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* ─── Upload Zone ─────────────────────────────────────────────── */
+.ec-upload-zone {
+    padding: 0 0.25rem;
+}
+
+.ec-upload-inner {
+    border: 2px dashed rgba(59,130,246,0.35);
+    border-radius: 14px;
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(59,130,246,0.04);
+    transition: all 0.2s;
+    cursor: pointer;
+    text-align: center;
+}
+
+.ec-upload-inner:hover,
+.ec-upload-inner.ec-drag-over {
+    border-color: #3b82f6;
+    background: rgba(59,130,246,0.09);
+}
+
+.ec-upload-icon {
+    font-size: 2.2rem;
+    color: #3b82f6;
+    opacity: 0.7;
+}
+
+.ec-upload-text {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.ec-upload-sub {
+    font-size: 0.78rem;
+    opacity: 0.7;
+}
+
+.ec-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1.2rem;
+    background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+    color: white;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.2s;
+}
+.ec-upload-btn:hover { opacity: 0.85; }
+
+/* Progress bar upload */
+.ec-progress-bar {
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.4rem;
+}
+.ec-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.4s;
+}
+.ec-progress-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+/* ─── KPI Row ─────────────────────────────────────────────────── */
+.ec-kpi-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 1100px) { .ec-kpi-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px)  { .ec-kpi-row { grid-template-columns: repeat(2, 1fr); } }
+
+.ec-kpi {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    transition: border-color 0.2s;
+}
+.ec-kpi:hover { border-color: rgba(59,130,246,0.4); }
+
+.ec-kpi-green { border-left: 3px solid #22c55e; }
+.ec-kpi-red   { border-left: 3px solid #f87171; }
+.ec-kpi-warn  { border-left: 3px solid #fbbf24; }
+
+.ec-kpi-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    min-height: 1.6rem;
+}
+
+.ec-kpi-label {
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+/* ─── Alertas fiscales ────────────────────────────────────────── */
+#ec-alertas-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.ec-alerta {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.8rem 1rem;
+    border-radius: 10px;
+    font-size: 0.83rem;
+}
+.ec-alerta-error   { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.25); }
+.ec-alerta-warning { background: rgba(251,191,36,0.08);  border: 1px solid rgba(251,191,36,0.25); }
+.ec-alerta-ok      { background: rgba(74,222,128,0.08);  border: 1px solid rgba(74,222,128,0.25); }
+.ec-alerta-icon    { font-size: 1rem; flex-shrink: 0; margin-top: 0.05rem; }
+
+/* ─── Section Card ────────────────────────────────────────────── */
+.ec-section-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.ec-section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.9rem 1.25rem;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border-light);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ec-conciliar-all-btn {
+    margin-left: auto;
+    padding: 0.3rem 0.9rem;
+    background: linear-gradient(135deg, #7c3aed, #a78bfa);
+    color: white;
+    border: none;
+    border-radius: 7px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: opacity 0.2s;
+}
+.ec-conciliar-all-btn:hover { opacity: 0.85; }
+
+/* ─── Lista de estados de cuenta ──────────────────────────────── */
+.ec-lista-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.ec-lista-table th {
+    padding: 0.7rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.ec-lista-row {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.ec-lista-row:hover { background: rgba(59,130,246,0.06); }
+.ec-lista-row td { padding: 0.75rem 1rem; color: var(--text-primary); }
+
+.ec-banco-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.6rem;
+    background: rgba(59,130,246,0.1);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.ec-cuenta-num {
+    margin-left: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.ec-periodo {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.ec-abono-cell { color: #4ade80 !important; }
+.ec-cargo-cell { color: #f87171 !important; }
+
+.ec-pct-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ec-pct-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px;
+    overflow: hidden;
+    min-width: 60px;
+}
+
+.ec-pct-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s;
+}
+
+.ec-btn-conciliar,
+.ec-btn-delete {
+    border: none;
+    border-radius: 6px;
+    padding: 0.3rem 0.55rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: opacity 0.2s;
+    margin-right: 0.25rem;
+}
+.ec-btn-conciliar {
+    background: rgba(167,139,250,0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(167,139,250,0.25);
+}
+.ec-btn-delete {
+    background: rgba(248,113,113,0.1);
+    color: #f87171;
+    border: 1px solid rgba(248,113,113,0.2);
+}
+.ec-btn-conciliar:hover { opacity: 0.75; }
+.ec-btn-delete:hover    { opacity: 0.75; }
+
+/* ─── Tabs ────────────────────────────────────────────────────── */
+.ec-tabs {
+    display: flex;
+    gap: 0.4rem;
+    padding: 0.75rem 1.25rem 0;
+    border-bottom: 1px solid var(--border-light);
+    background: rgba(255,255,255,0.01);
+}
+
+.ec-tab {
+    padding: 0.4rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 7px 7px 0 0;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+}
+.ec-tab:hover  { color: var(--text-primary); }
+.ec-tab.active {
+    color: #60a5fa;
+    border-bottom-color: #60a5fa;
+    background: rgba(96,165,250,0.07);
+}
+
+/* ─── Tabla de movimientos ────────────────────────────────────── */
+.ec-mov-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.ec-mov-table th {
+    padding: 0.6rem 0.85rem;
+    text-align: left;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border-light);
+    white-space: nowrap;
+}
+
+.ec-mov-table td {
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.ec-mov-conciliado { }
+.ec-mov-sin-conciliar { background: rgba(248,113,113,0.03); }
+.ec-mov-sin-conciliar:hover { background: rgba(248,113,113,0.07); }
+
+.ec-fecha    { font-size: 0.78rem; color: var(--text-secondary); white-space: nowrap; }
+.ec-concepto { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ec-ref      { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-secondary); }
+
+.ec-mov-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.ec-badge-ok  { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
+.ec-badge-err { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.25); }
+
+.ec-uuid-mini {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: #a78bfa;
+}
+
+/* ─── Footer tabla ────────────────────────────────────────────── */
+.ec-tabla-footer {
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--border-light);
+    background: rgba(255,255,255,0.01);
+}
+
+.ec-footer-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.ec-footer-sep { opacity: 0.4; }
+
+/* ─── Botón cerrar detalle ────────────────────────────────────── */
+.ec-btn-close-detalle {
+    margin-left: auto;
+    background: rgba(248,113,113,0.1);
+    border: 1px solid rgba(248,113,113,0.2);
+    color: #f87171;
+    border-radius: 7px;
+    padding: 0.25rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: opacity 0.2s;
+}
+.ec-btn-close-detalle:hover { opacity: 0.75; }
+
+/* ─── Utilidades ──────────────────────────────────────────────── */
+.td-r  { text-align: right; }
+.th-r  { text-align: right; }
