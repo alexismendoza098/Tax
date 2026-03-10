@@ -71,7 +71,8 @@
       "Bash(start:*)",
       "Bash(pkill:*)",
       "Bash(do echo:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm run migrate)"
     ]
   }
 }
