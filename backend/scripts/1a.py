@@ -1,13 +1,16 @@
 import sys
 import os
 import zipfile
+import shutil
 import pandas as pd
 import xml.etree.ElementTree as ET
 from glob import glob
 from datetime import datetime
 
 def process_zip(zip_path, output_csv):
-    temp_dir = os.path.join(os.path.dirname(zip_path), "temp_extract")
+    # Carpeta temporal única por ZIP para evitar contaminación entre ejecuciones
+    zip_name = os.path.splitext(os.path.basename(zip_path))[0]
+    temp_dir = os.path.join(os.path.dirname(zip_path), f"temp_extract_{zip_name}")
     os.makedirs(temp_dir, exist_ok=True)
     
     try:
@@ -225,9 +228,11 @@ def process_zip(zip_path, output_csv):
     df.to_csv(output_csv, index=False)
     print(f"Generated {output_csv} with {len(df)} rows.")
     
-    # Cleanup (optional)
-    # import shutil
-    # shutil.rmtree(temp_dir)
+    # Limpiar carpeta temporal para no contaminar ejecuciones futuras
+    try:
+        shutil.rmtree(temp_dir)
+    except Exception as cleanup_err:
+        print(f"[Warning] No se pudo limpiar {temp_dir}: {cleanup_err}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

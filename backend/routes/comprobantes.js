@@ -7,12 +7,14 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // GET /api/comprobantes — list with filters
+// Aislamiento: solo muestra comprobantes cuyos contribuyentes pertenecen al usuario autenticado
 router.get('/', async (req, res) => {
   try {
     const { contribuyente_id, tipo, metodo_pago, fecha_inicio, fecha_fin, rfc, search, page = 1, limit = 50 } = req.query;
 
-    let where = ['1=1'];
-    let params = [];
+    // Siempre filtramos por el usuario autenticado mediante JOIN a contribuyentes
+    let where = ['cnt.usuario_id = ?'];
+    let params = [req.user.id];
 
     if (contribuyente_id) {
       where.push('c.contribuyente_id = ?');
@@ -45,16 +47,18 @@ router.get('/', async (req, res) => {
     }
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
+    // JOIN a contribuyentes garantiza el aislamiento por usuario
+    const joinClause = 'INNER JOIN contribuyentes cnt ON c.contribuyente_id = cnt.id';
 
     // Count total
     const [countResult] = await pool.query(
-      `SELECT COUNT(*) as total FROM comprobantes c WHERE ${where.join(' AND ')}`,
+      `SELECT COUNT(*) as total FROM comprobantes c ${joinClause} WHERE ${where.join(' AND ')}`,
       params
     );
 
     // Fetch page
     const [rows] = await pool.query(
-      `SELECT c.* FROM comprobantes c WHERE ${where.join(' AND ')} ORDER BY c.fecha DESC LIMIT ? OFFSET ?`,
+      `SELECT c.* FROM comprobantes c ${joinClause} WHERE ${where.join(' AND ')} ORDER BY c.fecha DESC LIMIT ? OFFSET ?`,
       [...params, parseInt(limit), offset]
     );
 
@@ -72,11 +76,18 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/comprobantes/:uuid — full detail
+// Aislamiento: valida que el CFDI pertenezca a un contribuyente del usuario autenticado
 router.get('/:uuid', async (req, res) => {
   try {
     const uuid = req.params.uuid;
 
-    const [comprobante] = await pool.query('SELECT * FROM comprobantes WHERE uuid = ?', [uuid]);
+    // JOIN a contribuyentes para validar ownership antes de retornar datos
+    const [comprobante] = await pool.query(
+      `SELECT c.* FROM comprobantes c
+       INNER JOIN contribuyentes cnt ON c.contribuyente_id = cnt.id
+       WHERE c.uuid = ? AND cnt.usuario_id = ?`,
+      [uuid, req.user.id]
+    );
     if (comprobante.length === 0) {
       return res.status(404).json({ error: 'Comprobante no encontrado' });
     }
@@ -110,8 +121,20 @@ router.get('/:uuid', async (req, res) => {
 });
 
 // DELETE /api/comprobantes/:uuid — cascade delete
+// Aislamiento: solo permite borrar si el CFDI pertenece al usuario autenticado
 router.delete('/:uuid', async (req, res) => {
   try {
+    // Validar ownership antes de borrar
+    const [check] = await pool.query(
+      `SELECT c.uuid FROM comprobantes c
+       INNER JOIN contribuyentes cnt ON c.contribuyente_id = cnt.id
+       WHERE c.uuid = ? AND cnt.usuario_id = ?`,
+      [req.params.uuid, req.user.id]
+    );
+    if (check.length === 0) {
+      return res.status(404).json({ error: 'Comprobante no encontrado' });
+    }
+
     const [result] = await pool.query('DELETE FROM comprobantes WHERE uuid = ?', [req.params.uuid]);
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Comprobante no encontrado' });

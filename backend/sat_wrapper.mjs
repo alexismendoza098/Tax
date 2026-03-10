@@ -274,12 +274,13 @@ async function actionRequest(args) {
   const end   = args.end   || start;
 
   const results   = [];
-  const MAX_RETRY = 2;
+  const MAX_RETRY = 3; // +1 para reintento automático de código 5002
+  let startSecs   = '00:00:00'; // se ajusta a '00:00:01' si SAT devuelve código 5002
 
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     try {
       const period = DateTimePeriod.createFromValues(
-        `${start} 00:00:00`,
+        `${start} ${startSecs}`,
         `${end} 23:59:59`
       );
 
@@ -309,6 +310,13 @@ async function actionRequest(args) {
           codigo_estado_solicitud: '5000',
           mensaje:                 SAT_CODES['5000'].label,
         });
+        break; // éxito
+      } else if (code === '5002' && startSecs === '00:00:00' && attempt < MAX_RETRY) {
+        // SAT: límite de por vida — reintento automático con inicio +1 segundo
+        console.error(`[SAT 5002] Reintentando ${start}→${end} con +1s (intento ${attempt}/${MAX_RETRY})`);
+        startSecs = '00:00:01';
+        await sleep(1500);
+        continue;
       } else {
         results.push({
           error:        SAT_CODES[code]?.label || `Error SAT (código ${code})`,
@@ -317,8 +325,8 @@ async function actionRequest(args) {
           fecha_inicio: start,
           fecha_fin:    end,
         });
+        break;
       }
-      break; // éxito — salir del retry loop
 
     } catch (e) {
       const isLastAttempt = attempt >= MAX_RETRY;
@@ -434,6 +442,24 @@ async function actionDownload(args) {
         cached:  true,
       });
       return;
+    }
+  }
+
+  // ── Fallback legacy: buscar en raíz de DOWNLOAD_BASE (antes de que existieran subdirectorios por RFC) ──
+  if (!args.force) {
+    const legacyPath = join(DOWNLOAD_BASE, `${args.id}.zip`);
+    if (existsSync(legacyPath)) {
+      const size = statSync(legacyPath).size;
+      if (size > 1024) {
+        out({
+          status:  'success',
+          file:    legacyPath,
+          size,
+          message: 'Paquete recuperado de ruta legacy (raíz downloads)',
+          cached:  true,
+        });
+        return;
+      }
     }
   }
 

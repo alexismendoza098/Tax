@@ -9,6 +9,9 @@ const { insertCFDI } = require('../utils/cfdiInserter');
 const pool = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 
+// Normaliza pkgId para lookup flexible (con/sin extensión, con/sin sufijo _01)
+const normalizePkgId = id => String(id || '').replace(/\.(zip|txt)$/i, '').replace(/_\d{2}$/, '').toLowerCase();
+
 // Helper to parse Metadata TXT
 function parseMetadata(content) {
     const lines = content.split(/\r?\n/);
@@ -59,6 +62,74 @@ function parseMetadata(content) {
     return rows;
 }
 
+// ─── Convierte TXT Metadata (tilde-delimitado del SAT) al formato largo ───────
+// Produce filas {Or, Var, Val, UUID} — mismo formato que 1a.py para XMLs,
+// pero 100% en Node.js: sin Python, sin ZIP temporal, sin loops duplicados.
+function metadataToLongRows(content) {
+    const lines = content.split(/\r?\n/);
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].trim().split('~');
+    const hMap = {};
+    headers.forEach((h, i) => { hMap[h.trim()] = i; });
+
+    const getVal = (parts, key) =>
+        hMap[key] !== undefined && hMap[key] < parts.length
+            ? (parts[hMap[key]] || '').trim() : null;
+
+    const longRows = [];
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const parts = line.split('~');
+        const uuid = getVal(parts, 'Uuid');
+        if (!uuid) continue;
+
+        const add = (varName, val) => {
+            if (val !== null && val !== undefined && String(val).trim() !== '') {
+                longRows.push({ Or: 'Metadata', Var: varName, Val: String(val), UUID: uuid });
+            }
+        };
+
+        const fechaEmision = getVal(parts, 'FechaEmision');
+        add('Version', '');
+        add('Fecha', fechaEmision);
+        if (fechaEmision) {
+            try {
+                const [y, m, d] = fechaEmision.split(' ')[0].split('-');
+                if (y && m && d) add('FechaDDMMYYYY', `${d}/${m}/${y}`);
+            } catch (_) {}
+        }
+        add('Total',             getVal(parts, 'Monto'));
+        add('SubTotal',          '0');
+        add('Descuento',         '0');
+        add('Moneda',            'MXN');
+        add('TipoDeComprobante', getVal(parts, 'EfectoComprobante'));
+        add('FormaPago',         '');
+        add('MetodoPago',        '');
+        add('LugarExpedicion',   '');
+        add('TotalTraslados',    '0');
+        add('TotalRetenciones',  '0');
+        add('RfcEmisor',         getVal(parts, 'RfcEmisor'));
+        add('NombreEmisor',      getVal(parts, 'NombreEmisor'));
+        add('RfcReceptor',       getVal(parts, 'RfcReceptor'));
+        add('NombreReceptor',    getVal(parts, 'NombreReceptor'));
+        add('Estado',            getVal(parts, 'Estatus'));
+        add('FechaCancelacion',  getVal(parts, 'FechaCancelacion'));
+    }
+    return longRows;
+}
+
+// Serializa filas largas al texto CSV que se concatena en el master CSV
+function longRowsToCsvLines(longRows, isFirst) {
+    const esc = s => `"${String(s || '').replace(/"/g, '""')}"`;
+    const body = longRows
+        .map(r => `${esc(r.Or)},${esc(r.Var)},${esc(r.Val)},${esc(r.UUID)}`)
+        .join('\n');
+    return isFirst ? `Or,Var,Val,UUID\n${body}` : `\n${body}`;
+}
+
 // Temporary directory for extraction
 const TEMP_DIR = path.join(__dirname, '..', 'uploads', 'temp_flatten');
 const DOWNLOADS_DIR = path.join(__dirname, '..', 'downloads');
@@ -83,6 +154,19 @@ const findFileRecursively = (dir, filename) => {
     return null;
 };
 
+// Helper: calcula el nombre consecutivo para el siguiente reporte consolidado
+// Ej: si existe Cfdi_RyE01 y Cfdi_RyE02, retorna Cfdi_RyE03
+function getNextConsolidatedName(tipo) {
+    const files = fs.existsSync(DOWNLOADS_DIR) ? fs.readdirSync(DOWNLOADS_DIR) : [];
+    const pat = new RegExp(`^Reporte_Consolidado_${tipo}_RyE(\\d+)\\.(csv|xlsx)$`, 'i');
+    let max = 0;
+    files.forEach(f => {
+        const m = pat.exec(f);
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return `Reporte_Consolidado_${tipo}_RyE${String(max + 1).padStart(2, '0')}`;
+}
+
 const multer = require('multer');
 
 // Configure Multer for Uploads
@@ -102,10 +186,12 @@ const upload = multer({
     storage: storage,
     limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
     fileFilter: (req, file, cb) => {
-        if (file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed' || file.originalname.endsWith('.zip')) {
+        if (file.originalname.endsWith('.zip') || file.originalname.endsWith('.txt') ||
+            file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed' ||
+            file.mimetype === 'text/plain') {
             cb(null, true);
         } else {
-            cb(new Error('Solo se permiten archivos ZIP'), false);
+            cb(new Error('Solo se permiten archivos ZIP (CFDI) o TXT (Metadata)'), false);
         }
     }
 });
@@ -170,123 +256,209 @@ router.post('/process', authMiddleware, async (req, res) => {
         // De-duplicate
         packagesToProcess = [...new Set(packagesToProcess)];
 
-        const allRows = [];
+        // ── Lookup tipo real desde solicitudes_sat (para nombrar reporte correctamente) ──
+        // Los paquetes SAT vienen SIEMPRE como .zip aunque sean Metadata → la extensión no basta
+        const [solRows] = await pool.query(
+            'SELECT tipo_solicitud, paquetes FROM solicitudes_sat WHERE paquetes IS NOT NULL'
+        ).catch(() => [[]]);
+        const typeLookup = {};
+        solRows.forEach(sol => {
+            try {
+                JSON.parse(sol.paquetes || '[]').forEach(pid => {
+                    typeLookup[pid] = sol.tipo_solicitud;
+                    typeLookup[normalizePkgId(pid)] = sol.tipo_solicitud;
+                });
+            } catch (_) {}
+        });
+
+        // Un Master CSV por TIPO de paquete (Metadata o Cfdi) — todos los paquetes
+        // seleccionados se combinan en el Master de su tipo y producen UN solo XLSX.
+        const ts = Date.now();
+        const metaMasterPath = path.join(TEMP_DIR, `Master_meta_${ts}.csv`);
+        const cfdiMasterPath = path.join(TEMP_DIR, `Master_cfdi_${ts}.csv`);
+        let metaHeaderWritten = false;
+        let cfdiHeaderWritten = false;
+        let hasMetadataFiles = false;
+        let hasCfdiFiles = false;
         let processedCount = 0;
-        let finalReportPath = null;
-        
-        // CONSOLIDATION: Master CSV to hold all data
-        // We will accumulate all TEMPZ_{pkgId}.csv contents into this master file
-        const masterTimestamp = Date.now();
-        const masterCsvName = `Master_${masterTimestamp}.csv`;
-        const masterCsvPath = path.join(TEMP_DIR, masterCsvName);
-        let masterHeaderWritten = false;
+        const script2 = path.join(__dirname, '..', 'scripts', '2a.py');
 
-        for (const pkgId of packagesToProcess) {
-            // Try to find the file
-            let zipPath = path.join(DOWNLOADS_DIR, `${pkgId}.zip`);
-            if (!fs.existsSync(zipPath)) {
-                // Try recursive search
-                const foundPath = findFileRecursively(DOWNLOADS_DIR, `${pkgId}.zip`);
-                if (foundPath) zipPath = foundPath;
-                else {
-                    console.warn(`[Flatten] Package ${pkgId} not found`);
-                    continue;
-                }
-            }
-
-            console.log(`[Flatten] Processing package: ${pkgId} at path: ${zipPath}`);
-
-            // 1. DB Insertion (Node.js Logic) - Essential for Calculation Step
+        // Detecta si un ZIP es CFDI (contiene .xml) o Metadata (contiene .txt)
+        // Se usa como fallback cuando el paquete no tiene tipo registrado en la DB
+        function detectZipType(zipPath) {
             try {
                 const zip = new AdmZip(zipPath);
-                const zipEntries = zip.getEntries();
-                
-                for (const entry of zipEntries) {
-                    if (entry.entryName.toLowerCase().endsWith('.xml')) {
-                        const xmlContent = entry.getData().toString('utf8');
-                        try {
-                            const parsed = await parseXML(xmlContent);
-                            if (contribuyenteId) {
-                                if (parsed.comprobante) parsed.comprobante.metadata_paquete_id = pkgId;
-                                else parsed.metadata_paquete_id = pkgId;
-                                await insertCFDI(parsed, contribuyenteId).catch(() => { /* CFDI duplicado o inválido — omitir */ });
-                            }
-                        } catch (_) { /* XML malformado — omitir este archivo */ }
+                const entries = zip.getEntries();
+                const hasXml = entries.some(e => e.entryName.toLowerCase().endsWith('.xml'));
+                return hasXml ? 'CFDI' : 'Metadata';
+            } catch (_) {
+                return 'CFDI'; // fallback seguro
+            }
+        }
+
+        for (let pkgId of packagesToProcess) {
+            // Normalizar: el frontend podría mandar la extensión incluida (p.ej. "UUID.txt")
+            // → la eliminamos para trabajar siempre con el ID puro
+            pkgId = pkgId.replace(/\.(zip|txt)$/i, '');
+
+            // ── Resolver archivo: busca .zip primero (CFDI), luego .txt (Metadata SAT) ──
+            let pkgPath = path.join(DOWNLOADS_DIR, `${pkgId}.zip`);
+            let isTxtFile = false;
+
+            if (!fs.existsSync(pkgPath)) {
+                const foundZip = findFileRecursively(DOWNLOADS_DIR, `${pkgId}.zip`);
+                if (foundZip) {
+                    pkgPath = foundZip;
+                } else {
+                    const tryTxt = path.join(DOWNLOADS_DIR, `${pkgId}.txt`);
+                    if (fs.existsSync(tryTxt)) {
+                        pkgPath = tryTxt;
+                        isTxtFile = true;
+                    } else {
+                        const foundTxt = findFileRecursively(DOWNLOADS_DIR, `${pkgId}.txt`);
+                        if (foundTxt) {
+                            pkgPath = foundTxt;
+                            isTxtFile = true;
+                        } else {
+                            console.warn(`[Flatten] Package ${pkgId} no encontrado (.zip ni .txt)`);
+                            continue;
+                        }
                     }
                 }
-            } catch (e) {
-                console.error(`[Flatten] Error reading zip for DB: ${e.message}`);
             }
 
-            // 2. Python Flow (Report Generation)
-            // 1a.py -> TEMPZ.csv
+            // Tipo por paquete — DB tiene prioridad; si no hay registro, se inspecciona
+            // el contenido del ZIP (.xml adentro = CFDI, .txt adentro = Metadata)
+            const realType = typeLookup[pkgId] || typeLookup[normalizePkgId(pkgId)]
+                           || (isTxtFile ? 'Metadata' : detectZipType(pkgPath));
+            const isMetaPkg = (realType === 'Metadata' || isTxtFile);
+
+            console.log(`[Flatten] Processing package: ${pkgId} at path: ${pkgPath} (${isMetaPkg ? 'TXT/Metadata' : 'ZIP/CFDI'})`);
+
+            // ── 1. DB Insertion — solo para ZIPs (contienen XMLs) ──
+            if (!isTxtFile) {
+                try {
+                    const zip = new AdmZip(pkgPath);
+                    const zipEntries = zip.getEntries();
+
+                    for (const entry of zipEntries) {
+                        if (entry.entryName.toLowerCase().endsWith('.xml')) {
+                            const xmlContent = entry.getData().toString('utf8');
+                            try {
+                                const parsed = await parseXML(xmlContent);
+                                if (contribuyenteId) {
+                                    if (parsed.comprobante) parsed.comprobante.metadata_paquete_id = pkgId;
+                                    else parsed.metadata_paquete_id = pkgId;
+                                    await insertCFDI(parsed, contribuyenteId).catch(() => { /* CFDI duplicado o inválido — omitir */ });
+                                }
+                            } catch (_) { /* XML malformado — omitir */ }
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[Flatten] Error leyendo ZIP para DB: ${e.message}`);
+                }
+            }
+
+            // ── 2a. TXT Metadata: procesar DIRECTAMENTE en Node.js (sin 1a.py) ──
+            if (isTxtFile) {
+                try {
+                    const content = fs.readFileSync(pkgPath, 'utf8');
+                    const longRows = metadataToLongRows(content);
+                    if (longRows.length === 0) {
+                        console.warn(`[Flatten] TXT ${pkgId}: sin registros válidos — omitiendo`);
+                        continue;
+                    }
+                    const csvText = longRowsToCsvLines(longRows, !metaHeaderWritten);
+                    fs.appendFileSync(metaMasterPath, csvText);
+                    metaHeaderWritten = true;
+                    hasMetadataFiles = true;
+                    console.log(`[Flatten] TXT ${pkgId}: ${longRows.length} filas Metadata escritas`);
+                    processedCount++;
+                } catch (e) {
+                    console.error(`[Flatten] Error procesando TXT ${pkgId}: ${e.message}`);
+                }
+                continue; // ← saltar el bloque de Python 1a.py
+            }
+
+            // ── 2b. ZIP/CFDI: flujo Python con 1a.py ──
             const tempCsv = path.join(TEMP_DIR, `TEMPZ_${pkgId}.csv`);
             const script1 = path.join(__dirname, '..', 'scripts', '1a.py');
-            
-            await new Promise((resolve, reject) => {
-                exec(`python "${script1}" "${zipPath}" "${tempCsv}"`, (error, stdout, stderr) => {
-                    if (error) { console.error(`[1a.py] Error: ${stderr}`); resolve(); return; }
-                    
-                    // CONSOLIDATION: Append to Master CSV
+
+            await new Promise((resolve) => {
+                exec(`python "${script1}" "${pkgPath}" "${tempCsv}"`, (error, stdout, stderr) => {
+                    if (stdout && stdout.trim()) console.log(`[1a.py][${pkgId}] ${stdout.trim()}`);
+                    if (stderr && stderr.trim()) console.warn(`[1a.py][${pkgId}] STDERR: ${stderr.trim()}`);
+                    if (error) {
+                        console.error(`[1a.py][${pkgId}] Falló (código ${error.code}): ${stderr || error.message}`);
+                        resolve(); return;
+                    }
+
                     if (fs.existsSync(tempCsv)) {
                         const content = fs.readFileSync(tempCsv, 'utf8');
                         const lines = content.split(/\r?\n/);
-                        if (lines.length > 0) {
-                            if (!masterHeaderWritten) {
-                                // Write header + all lines
-                                fs.appendFileSync(masterCsvPath, content);
-                                masterHeaderWritten = true;
-                            } else {
-                                // Write all lines EXCEPT header (line 0)
-                                // Only if there's data
-                                if (lines.length > 1) {
-                                    const dataLines = lines.slice(1).join('\n');
-                                    if (dataLines.trim()) {
-                                        fs.appendFileSync(masterCsvPath, '\n' + dataLines.trim());
-                                    }
-                                }
+                        // Escribir al master correcto según el tipo detectado del ZIP
+                        const targetMaster = isMetaPkg ? metaMasterPath : cfdiMasterPath;
+                        const hdrWritten   = isMetaPkg ? metaHeaderWritten : cfdiHeaderWritten;
+                        if (!hdrWritten) {
+                            fs.appendFileSync(targetMaster, content);
+                            if (isMetaPkg) metaHeaderWritten = true; else cfdiHeaderWritten = true;
+                        } else {
+                            if (lines.length > 1) {
+                                const dataLines = lines.slice(1).join('\n');
+                                if (dataLines.trim()) fs.appendFileSync(targetMaster, '\n' + dataLines.trim());
                             }
                         }
-                        // Cleanup temp
+                        if (isMetaPkg) hasMetadataFiles = true; else hasCfdiFiles = true;
                         try { fs.unlinkSync(tempCsv); } catch (_) { /* cleanup-temp */ }
                     }
                     resolve();
                 });
             });
-            
+
             processedCount++;
         }
 
-        // 3. Final Pivot (2a.py) on Master CSV
-        if (processedCount > 0 && fs.existsSync(masterCsvPath)) {
-            const consolidatedName = `Reporte_Consolidado_${masterTimestamp}`;
-            const finalCsv = path.join(DOWNLOADS_DIR, `${consolidatedName}.csv`);
-            const script2 = path.join(__dirname, '..', 'scripts', '2a.py');
-            
-            await new Promise((resolve, reject) => {
-                exec(`python "${script2}" "${masterCsvPath}" "${finalCsv}"`, (error2, stdout2, stderr2) => {
-                    if (error2) { console.error(`[2a.py] Error: ${stderr2}`); resolve(); return; }
-                    console.log(`[2a.py] Output: ${stdout2}`);
-                    finalReportPath = finalCsv.replace('.csv', '.xlsx');
-                    resolve();
-                });
-            });
-            
-            // Cleanup master
-            try { fs.unlinkSync(masterCsvPath); } catch (_) { /* cleanup-temp */ }
-        }
+        // ── 3. Pivot con 2a.py — uno por tipo ──
+        const generatedFiles = [];
 
-        if (finalReportPath && fs.existsSync(finalReportPath)) {
-            const filename = path.basename(finalReportPath);
-             res.json({
+        const runPivot = (masterPath, tipo) => new Promise((resolve) => {
+            if (!fs.existsSync(masterPath)) { resolve(); return; }
+            const consolidatedName = getNextConsolidatedName(tipo);
+            const finalCsv = path.join(DOWNLOADS_DIR, `${consolidatedName}.csv`);
+            exec(`python "${script2}" "${masterPath}" "${finalCsv}"`, (err2, stdout2, stderr2) => {
+                if (err2) { console.error(`[2a.py][${tipo}] Error: ${stderr2}`); }
+                else {
+                    if (stdout2 && stdout2.trim()) console.log(`[2a.py][${tipo}] ${stdout2.trim()}`);
+                    const xlsxPath = finalCsv.replace('.csv', '.xlsx');
+                    if (fs.existsSync(xlsxPath)) {
+                        const fname = path.basename(xlsxPath);
+                        generatedFiles.push({
+                            filename: fname,
+                            downloadUrl: `${process.env.API_URL || 'http://localhost:3000'}/api/flatten/download/${fname}`,
+                        });
+                    }
+                }
+                try { fs.unlinkSync(masterPath); } catch (_) { /* cleanup-temp */ }
+                resolve();
+            });
+        });
+
+        if (hasMetadataFiles) await runPivot(metaMasterPath, 'Metadata');
+        if (hasCfdiFiles)     await runPivot(cfdiMasterPath, 'Cfdi');
+
+        // Limpiar masters residuales (si no se procesaron)
+        [metaMasterPath, cfdiMasterPath].forEach(p => { try { if (fs.existsSync(p)) fs.unlinkSync(p); } catch (_) {} });
+
+        if (generatedFiles.length > 0) {
+            res.json({
                 success: true,
-                message: `Procesados ${processedCount} paquetes en un reporte consolidado.`,
-                downloadUrl: `${process.env.API_URL || 'http://localhost:3000'}/api/flatten/download/${filename}`,
-                filename: filename
+                message: `Procesados ${processedCount} paquete(s). ${generatedFiles.length} reporte(s) generado(s).`,
+                files: generatedFiles,
+                filename: generatedFiles[0].filename,
+                downloadUrl: generatedFiles[0].downloadUrl,
             });
         } else {
-             // Fallback if python failed or no files
-             res.json({ success: false, error: "Error en procesamiento Python" });
+            res.json({ success: false, error: 'No se generaron reportes. Verifica que los paquetes tengan datos válidos.' });
         }
 
     } catch (error) {
@@ -322,19 +494,6 @@ router.get('/reports', authMiddleware, (req, res) => {
     } catch (e) {
         console.error('[Flatten] Error listando reportes:', e);
         res.status(500).json({ error: 'Error al listar reportes' });
-    }
-});
-
-router.get('/download/:filename', (req, res) => {
-    const { filename } = req.params;
-    // Sanitize
-    if (filename.includes('/') || filename.includes('\\')) return res.status(400).send("Nombre de archivo inválido");
-
-    const filePath = path.join(DOWNLOADS_DIR, filename);
-    if (fs.existsSync(filePath)) {
-        res.download(filePath);
-    } else {
-        res.status(404).send("Archivo no encontrado");
     }
 });
 
@@ -455,6 +614,8 @@ router.get('/packages', authMiddleware, async (req, res) => {
         }
         
         // Helper to get files recursively
+        // Excluye "temp_extract" y "temp_flatten" — son directorios temporales de 1a.py
+        const SKIP_DIRS = new Set(['temp_extract', 'temp_flatten']);
         const getFiles = (dir) => {
             let results = [];
             const list = fs.readdirSync(dir);
@@ -462,9 +623,13 @@ router.get('/packages', authMiddleware, async (req, res) => {
                 const filePath = path.join(dir, file);
                 const stat = fs.statSync(filePath);
                 if (stat && stat.isDirectory()) {
-                    results = results.concat(getFiles(filePath));
+                    if (!SKIP_DIRS.has(file)) {          // ← saltar carpetas temporales
+                        results = results.concat(getFiles(filePath));
+                    }
                 } else {
-                    if (file.endsWith('.zip') || file.endsWith('.txt')) {
+                    // Solo archivos .zip o .txt que NO sean reportes consolidados
+                    if ((file.endsWith('.zip') || file.endsWith('.txt')) &&
+                        !file.startsWith('Reporte_') && !file.startsWith('Master_')) {
                         results.push(filePath);
                     }
                 }
@@ -473,30 +638,86 @@ router.get('/packages', authMiddleware, async (req, res) => {
         };
 
         const allFiles = getFiles(DOWNLOADS_DIR);
-        
-        // Get list of processed packages from DB
-        const [rows] = await pool.query('SELECT DISTINCT metadata_paquete_id FROM comprobantes');
-        const processedIds = new Set(rows.map(r => r.metadata_paquete_id));
-        
-        const packages = allFiles.map(filePath => {
+
+        // ── Mapa pkgId → {tipo, direccion} desde solicitudes_sat ──────────────
+        // Aislamiento: solo paquetes del usuario autenticado
+        // (con fallback para datos históricos sin usuario_id asignado)
+        const [solicitudes] = await pool.query(`
+            SELECT tipo_solicitud, tipo_comprobante, paquetes
+            FROM solicitudes_sat
+            WHERE paquetes IS NOT NULL
+              AND (
+                usuario_id = ?
+                OR (usuario_id IS NULL AND rfc IN (
+                      SELECT rfc FROM contribuyentes WHERE usuario_id = ?
+                    ))
+              )
+        `, [req.user.id, req.user.id]);
+
+        const pkgMap = {};
+        // Whitelist de IDs que pertenecen al usuario actual
+        const userPkgIds = new Set();
+        solicitudes.forEach(sol => {
+            try {
+                JSON.parse(sol.paquetes || '[]').forEach(pid => {
+                    const entry = { tipo: sol.tipo_solicitud, dir: sol.tipo_comprobante };
+                    pkgMap[pid] = entry;
+                    pkgMap[normalizePkgId(pid)] = entry; // lookup flexible (sin _01, sin extensión)
+                    userPkgIds.add(pid);
+                    userPkgIds.add(normalizePkgId(pid));
+                });
+            } catch (_) {}
+        });
+
+        // ── "Procesado" para CFDI: verificar en comprobantes del usuario ──────
+        const [cfdiRows] = await pool.query(`
+            SELECT DISTINCT c.metadata_paquete_id
+            FROM comprobantes c
+            INNER JOIN contribuyentes co ON c.contribuyente_id = co.id
+            WHERE co.usuario_id = ?
+        `, [req.user.id]);
+        const processedCfdiIds = new Set(cfdiRows.map(r => r.metadata_paquete_id));
+
+        // ── "Procesado" para Metadata: si existe un reporte posterior al archivo ─
+        const metaReports = fs.readdirSync(DOWNLOADS_DIR)
+            .filter(f => /^Reporte_Consolidado_Metadata_RyE\d+\.(csv|xlsx)$/i.test(f))
+            .sort();
+        const latestMetaTime = metaReports.length
+            ? fs.statSync(path.join(DOWNLOADS_DIR, metaReports[metaReports.length - 1])).mtime
+            : null;
+
+        // Filtrar allFiles a solo los paquetes que pertenecen al usuario
+        const userFiles = allFiles.filter(filePath => {
+            const pkgId = path.basename(filePath).replace(/\.(zip|txt)$/i, '');
+            return userPkgIds.has(pkgId) || userPkgIds.has(normalizePkgId(pkgId));
+        });
+
+        const packages = userFiles.map(filePath => {
             const fileName = path.basename(filePath);
             const relativePath = path.relative(DOWNLOADS_DIR, filePath);
-            
-            let type = 'CFDI';
-            if (fileName.toLowerCase().includes('meta')) type = 'Metadata';
-            
-            // Check if processed
-            // We use the filename (without extension) as ID often
             const pkgId = fileName.replace(/\.(zip|txt)$/i, '');
-            const isProcessed = processedIds.has(pkgId);
-            
+            const fileStat = fs.statSync(filePath);
+
+            // ── Tipo y dirección (DB primero, extensión como fallback) ────────
+            const dbInfo = pkgMap[pkgId] || pkgMap[normalizePkgId(pkgId)] || {};
+            const type      = dbInfo.tipo || (fileName.endsWith('.txt') ? 'Metadata' : 'CFDI');
+            const direccion = dbInfo.dir === 'Issued'   ? 'Emitido'
+                            : dbInfo.dir === 'Received' ? 'Recibido'
+                            : 'Sin clasificar';
+
+            // ── Estado "Procesado" ────────────────────────────────────────────
+            const isProcessed = type === 'CFDI'
+                ? processedCfdiIds.has(pkgId)
+                : (latestMetaTime != null && fileStat.mtime < latestMetaTime);
+
             return {
-                name: fileName,
-                path: relativePath, // Useful for backend, maybe not safe for frontend?
-                type: type,
+                name:      fileName,
+                path:      relativePath,
+                type,        // 'Metadata' | 'CFDI'
+                direccion,   // 'Emitido' | 'Recibido' | 'Sin clasificar'
                 processed: isProcessed,
-                size: (fs.statSync(filePath).size / 1024).toFixed(2) + ' KB',
-                date: fs.statSync(filePath).mtime
+                size:      (fileStat.size / 1024).toFixed(2) + ' KB',
+                date:      fileStat.mtime
             };
         });
         
@@ -525,7 +746,26 @@ router.post('/delete', authMiddleware, async (req, res) => {
             // pkgId usually comes as the filename (e.g. 'UUID.zip') from the frontend selection
             // But just in case, handle potential paths or IDs
             const filename = path.basename(pkgId);
-            
+            const bareId = filename.replace(/\.(zip|txt)$/i, '');
+
+            // Aislamiento: verificar que el paquete pertenezca al usuario
+            const [owns] = await pool.query(`
+                SELECT 1 FROM solicitudes_sat
+                WHERE JSON_SEARCH(paquetes, 'one', ?) IS NOT NULL
+                  AND (
+                    usuario_id = ?
+                    OR (usuario_id IS NULL AND rfc IN (
+                          SELECT rfc FROM contribuyentes WHERE usuario_id = ?
+                        ))
+                  )
+                LIMIT 1
+            `, [bareId, req.user.id, req.user.id]);
+
+            if (!owns.length) {
+                errors.push({ file: filename, error: 'Acceso denegado: paquete no pertenece a tu cuenta' });
+                continue;
+            }
+
             const foundPath = findFileRecursively(DOWNLOADS_DIR, filename);
             
             if (foundPath) {
@@ -563,6 +803,42 @@ router.post('/delete', authMiddleware, async (req, res) => {
     } catch (e) {
         console.error("Delete Error:", e);
         res.status(500).json({ error: "Error al eliminar paquetes" });
+    }
+});
+
+// ── GET /api/flatten/download/:filename ────────────────────────────
+// Descarga individual de un archivo ZIP (o TXT) del repositorio
+// Aislamiento: valida que el paquete pertenezca al usuario autenticado
+router.get('/download/:filename', authMiddleware, async (req, res) => {
+    try {
+        const filename = path.basename(req.params.filename); // sanitizar path traversal
+        const pkgId = filename.replace(/\.(zip|txt)$/i, '');
+
+        // Verificar que el paquete pertenezca al usuario (por solicitudes_sat.paquetes)
+        const [owns] = await pool.query(`
+            SELECT 1 FROM solicitudes_sat
+            WHERE JSON_SEARCH(paquetes, 'one', ?) IS NOT NULL
+              AND (
+                usuario_id = ?
+                OR (usuario_id IS NULL AND rfc IN (
+                      SELECT rfc FROM contribuyentes WHERE usuario_id = ?
+                    ))
+              )
+            LIMIT 1
+        `, [pkgId, req.user.id, req.user.id]);
+
+        if (!owns.length) {
+            return res.status(403).json({ error: 'Acceso denegado: este paquete no pertenece a tu cuenta' });
+        }
+
+        const filePath = findFileRecursively(DOWNLOADS_DIR, filename);
+        if (!filePath || !fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Archivo no encontrado en el repositorio' });
+        }
+        res.download(filePath, filename);
+    } catch (e) {
+        console.error('[FLATTEN/DOWNLOAD]', e);
+        res.status(500).json({ error: e.message });
     }
 });
 

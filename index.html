@@ -113,6 +113,7 @@
             <nav>
                 <ul>
                     <li><a href="#proceso" onclick="showSection('standard')"><i class="fas fa-satellite-dish"></i> Descarga SAT</a></li>
+                    <li id="nav-contribuyentes" style="display:none;"><a href="#contribuyentes" onclick="showSection('contribuyentes')"><i class="fas fa-id-card"></i> Mis RFCs</a></li>
                     <li id="nav-validacion" style="display:none;"><a href="#validacion" onclick="showSection('validacion')"><i class="fas fa-clipboard-check"></i> Validación</a></li>
                     <li id="nav-auditoria" style="display:none;"><a href="#auditoria" onclick="showSection('auditoria')"><i class="fas fa-search-dollar"></i> Auditoría</a></li>
                     <li id="nav-fiscal" style="display: none;"><a href="#fiscal" onclick="showSection('fiscal')"><i class="fas fa-chart-line"></i> Fiscal</a></li>
@@ -398,9 +399,8 @@
                     </div>
                     <div class="detail-tabs">
                         <button class="detail-tab active" onclick="showTab(2, 'simulator')"><i class="fas fa-cloud-download-alt"></i> Descargar</button>
-                        <button class="detail-tab" onclick="showTab(2, 'history')"><i class="fas fa-history"></i> Mis Solicitudes</button>
-                        <button class="detail-tab" onclick="showTab(2, 'code')"><i class="fas fa-code"></i> Técnico</button>
                         <button class="detail-tab" onclick="showTab(2, 'full')"><i class="fas fa-layer-group"></i> Descarga Completa</button>
+                        <button class="detail-tab" onclick="showTab(2, 'history')"><i class="fas fa-history"></i> Mis Solicitudes</button>
                     </div>
                 </div>
 
@@ -411,7 +411,7 @@
                         <button class="dl-mode-btn active" id="mode-custom" onclick="switchDownloadMode('custom')">
                             <i class="fas fa-calendar-alt"></i> Descarga por Fechas
                         </button>
-                        <button class="dl-mode-btn" id="mode-annual" onclick="switchDownloadMode('annual')">
+                        <button class="dl-mode-btn" id="mode-annual" onclick="switchDownloadMode('annual')" style="display:none;">
                             <i class="fas fa-calendar-check"></i> Descarga Anual Completa
                             <span class="dl-mode-badge">NUEVO</span>
                         </button>
@@ -446,7 +446,7 @@
                                 <label class="form-label">Estatus</label>
                                 <select class="form-input" id="cfdi-status">
                                     <option value="Todos">Todos</option>
-                                    <option value="Vigente">Vigente</option>
+                                    <option value="Vigente" selected>Vigente</option>
                                     <option value="Cancelado">Cancelado</option>
                                 </select>
                             </div>
@@ -559,41 +559,6 @@
                     </div>
                 </div>
 
-                <div class="detail-content" id="panel-2-code">
-                    <div class="code-block">
-                        <div class="code-header">
-                            <span class="code-lang">Python - Solicitud de Descarga</span>
-                            <button class="code-copy" onclick="copyCode(this)">Copiar</button>
-                        </div>
-                        <div class="code-content">
-<span class="keyword">def</span> <span class="function">_internal_send_request</span>(self, param_start, param_end, param_download_type, param_cfdi_type):
-    <span class="string">"""Envía una solicitud de descarga al SAT."""</span>
-    <span class="keyword">from</span> cfdiclient <span class="keyword">import</span> SolicitaDescargaEmitidos, SolicitaDescargaRecibidos
-
-    <span class="keyword">if</span> param_cfdi_type.upper() == <span class="string">'ISSUED'</span>:
-        _service_class = SolicitaDescargaEmitidos
-        _kwargs = {<span class="string">'rfc_emisor'</span>: self._rfc_solicitante}
-    <span class="keyword">else</span>:
-        _service_class = SolicitaDescargaRecibidos
-        _kwargs = {<span class="string">'rfc_receptor'</span>: self._rfc_solicitante}
-
-    _service = <span class="function">_service_class</span>(self._current_fiel, timeout=<span class="number">120</span>)
-
-    _response = _service.<span class="function">solicitar_descarga</span>(
-        self._auth_token,
-        self._rfc_solicitante,
-        param_start,
-        param_end,
-        tipo_solicitud=param_download_type,
-        **_kwargs
-    )
-
-    <span class="comment"># Respuesta incluye: cod_estatus, mensaje, id_solicitud</span>
-    <span class="keyword">return</span> _response.get(<span class="string">'id_solicitud'</span>)
-                        </div>
-                    </div>
-                </div>
-
                 <div class="detail-content" id="panel-2-full">
                     <div class="form-row">
                         <div class="form-group">
@@ -608,7 +573,7 @@
                             <label class="form-label">Estatus CFDI</label>
                             <select class="form-input" id="full-cfdi-status">
                                 <option value="Todos">Todos</option>
-                                <option value="Vigente">Vigente</option>
+                                <option value="Vigente" selected>Vigente</option>
                             </select>
                         </div>
                     </div>
@@ -764,10 +729,10 @@
                     
                     <!-- Upload Dropzone -->
                     <div class="upload-dropzone" id="dropzone">
-                        <input type="file" id="file-upload" accept=".zip" hidden>
+                        <input type="file" id="file-upload" accept=".zip,.txt" hidden>
                         <div class="dropzone-content">
                             <i class="fas fa-cloud-upload-alt"></i>
-                            <h3>Arrastra tus paquetes ZIP aquí</h3>
+                            <h3>Arrastra paquetes ZIP (CFDI) o TXT (Metadata) aquí</h3>
                             <p>o haz clic para explorar tus archivos</p>
                         </div>
                     </div>
@@ -776,6 +741,8 @@
                     <div class="workspace-controls">
                         <div class="ws-stats">
                             <span class="stat-item"><i class="fas fa-box"></i> Total: <b id="pkg-total">0</b></span>
+                            <span class="stat-item stat-filter" id="stat-filter-meta" style="color:#60a5fa" onclick="applyTypeFilter('Metadata')" title="Click para filtrar solo Metadata"><i class="fas fa-file-alt"></i> Metadata: <b id="pkg-meta-count">0</b></span>
+                            <span class="stat-item stat-filter" id="stat-filter-cfdi" style="color:#34d399" onclick="applyTypeFilter('CFDI')" title="Click para filtrar solo CFDI"><i class="fas fa-file-invoice"></i> CFDI: <b id="pkg-cfdi-count">0</b></span>
                             <span class="stat-item text-success"><i class="fas fa-check-circle"></i> Procesados: <b id="pkg-processed">0</b></span>
                         </div>
                         <div class="ws-actions">
@@ -1243,218 +1210,185 @@
              SECCIÓN VALIDACIÓN SAT — Metadata vs CFDI
              ═══════════════════════════════════════════════════ -->
         <section id="validacion-section" style="display:none;">
-            <div class="container-fluid px-4 py-3">
+            <div style="max-width:1400px; margin:0 auto; padding:1rem 2rem;">
 
                 <!-- Encabezado -->
-                <div class="d-flex align-items-center gap-3 mb-4">
-                    <i class="fas fa-clipboard-check fa-2x" style="color:var(--accent-green)"></i>
+                <div style="display:flex; align-items:center; gap:1rem; margin-bottom:2rem;">
+                    <i class="fas fa-clipboard-check" style="font-size:1.8rem; color:var(--accent-green)"></i>
                     <div>
-                        <h2 class="mb-0" style="font-size:1.4rem">Validación SAT</h2>
-                        <small class="text-muted">Compara Metadata descargada vs CFDIs (XML) para detectar faltantes e incongruencias</small>
+                        <h2 style="font-size:1.4rem; margin:0;">Validación SAT</h2>
+                        <small style="color:var(--text-secondary)">Compara Metadata descargada vs CFDIs (XML) para detectar faltantes e incongruencias</small>
                     </div>
                 </div>
 
                 <!-- Formulario de validación -->
-                <div class="card bg-card border-0 shadow-sm mb-4">
-                    <div class="card-body">
-                        <h6 class="text-muted mb-3"><i class="fas fa-search me-2"></i>Nueva Validación</h6>
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-3">
-                                <label class="form-label small">RFC</label>
-                                <input type="text" id="val-rfc" class="form-control"
-                                    placeholder="MESP980407UD4"
-                                    oninput="this.value=this.value.toUpperCase()">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small">Periodo inicio</label>
-                                <input type="date" id="val-inicio" class="form-control">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small">Periodo fin</label>
-                                <input type="date" id="val-fin" class="form-control">
-                            </div>
-                            <div class="col-md-3">
-                                <button id="val-btn-iniciar" class="btn btn-success w-100" onclick="valIniciar()">
-                                    <i class="fas fa-play-circle me-2"></i>Iniciar Validación
-                                </button>
-                            </div>
+                <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; padding:1.5rem; margin-bottom:1.5rem;">
+                    <h6 style="color:var(--text-secondary); margin-bottom:1rem;"><i class="fas fa-search" style="margin-right:0.5rem;"></i>Nueva Validación</h6>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; align-items:end;">
+                        <div class="form-group">
+                            <label class="form-label">RFC</label>
+                            <input type="text" id="val-rfc" class="form-input"
+                                placeholder="MESP980407UD4"
+                                oninput="this.value=this.value.toUpperCase()">
                         </div>
-                        <!-- Spinner procesando -->
-                        <div id="val-spinner" class="align-items-center gap-3 mt-3" style="display:none;">
-                            <div class="spinner-border spinner-border-sm text-info"></div>
-                            <span class="text-info">Procesando validación en segundo plano...</span>
+                        <div class="form-group">
+                            <label class="form-label">Periodo inicio</label>
+                            <input type="date" id="val-inicio" class="form-input">
                         </div>
-                        <div id="val-idle-msg" class="mt-2">
-                            <small class="text-muted"><i class="fas fa-info-circle me-1"></i>
-                                Requiere tener descargados: <strong>Metadata Emitidos + Metadata Recibidos + CFDI Emitidos + CFDI Recibidos</strong> para el mismo periodo.
-                            </small>
+                        <div class="form-group">
+                            <label class="form-label">Periodo fin</label>
+                            <input type="date" id="val-fin" class="form-input">
                         </div>
+                        <div class="form-group">
+                            <button id="val-btn-iniciar" class="btn btn-primary" style="width:100%;" onclick="valIniciar()">
+                                <i class="fas fa-play-circle"></i> Iniciar Validación
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Spinner procesando -->
+                    <div id="val-spinner" style="display:none; align-items:center; gap:0.75rem; margin-top:1rem;">
+                        <i class="fas fa-spinner fa-spin" style="color:var(--accent-blue)"></i>
+                        <span style="color:var(--accent-blue)">Procesando validación en segundo plano...</span>
+                    </div>
+                    <div id="val-idle-msg" style="margin-top:0.75rem;">
+                        <small style="color:var(--text-secondary)"><i class="fas fa-info-circle" style="margin-right:0.3rem;"></i>
+                            Requiere tener descargados: <strong>Metadata Emitidos + Metadata Recibidos + CFDI Emitidos + CFDI Recibidos</strong> para el mismo periodo.
+                        </small>
                     </div>
                 </div>
 
                 <!-- Panel de resultado -->
                 <div id="val-resultado-panel" style="display:none;">
 
-                    <!-- Tarjetas resumen -->
-                    <div class="row g-3 mb-4">
+                    <!-- Tarjetas resumen: Emitidos y Recibidos -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.5rem; margin-bottom:1.5rem;">
                         <!-- Emitidos -->
-                        <div class="col-md-6">
-                            <div class="card border-0 shadow-sm h-100" style="border-left:4px solid var(--accent-green)!important">
-                                <div class="card-body">
-                                    <h6 class="mb-3">
-                                        <i class="fas fa-arrow-circle-up me-2" style="color:var(--accent-green)"></i>
-                                        Emitidos
-                                    </h6>
-                                    <div class="row text-center g-2">
-                                        <div class="col-6">
-                                            <div class="p-2 rounded" style="background:rgba(255,255,255,0.05)">
-                                                <div class="fs-4 fw-bold" id="val-meta-emi">—</div>
-                                                <small class="text-muted">En Metadata SAT</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="p-2 rounded" style="background:rgba(255,255,255,0.05)">
-                                                <div class="fs-4 fw-bold" id="val-cfdi-emi">—</div>
-                                                <small class="text-muted">XMLs descargados</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="p-2 rounded bg-danger bg-opacity-10">
-                                                <div class="fs-5 fw-bold text-danger" id="val-falt-emi">—</div>
-                                                <small class="text-muted">🔴 Faltantes</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="p-2 rounded bg-info bg-opacity-10">
-                                                <div class="fs-5 fw-bold text-info" id="val-canc-emi">—</div>
-                                                <small class="text-muted">🔵 Cancelados</small>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <div style="background:var(--bg-card); border:1px solid var(--border-color); border-left:4px solid var(--accent-green); border-radius:16px; padding:1.5rem;">
+                            <h6 style="margin-bottom:1rem;">
+                                <i class="fas fa-arrow-circle-up" style="color:var(--accent-green); margin-right:0.5rem;"></i>
+                                Emitidos
+                            </h6>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; text-align:center;">
+                                <div style="background:rgba(255,255,255,0.05); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.5rem; font-weight:700;" id="val-meta-emi">—</div>
+                                    <small style="color:var(--text-secondary)">En Metadata SAT</small>
+                                </div>
+                                <div style="background:rgba(255,255,255,0.05); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.5rem; font-weight:700;" id="val-cfdi-emi">—</div>
+                                    <small style="color:var(--text-secondary)">XMLs descargados</small>
+                                </div>
+                                <div style="background:rgba(239,68,68,0.08); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.2rem; font-weight:700; color:var(--accent-red);" id="val-falt-emi">—</div>
+                                    <small style="color:var(--text-secondary)">Faltantes</small>
+                                </div>
+                                <div style="background:rgba(96,165,250,0.08); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.2rem; font-weight:700; color:var(--accent-blue);" id="val-canc-emi">—</div>
+                                    <small style="color:var(--text-secondary)">Cancelados</small>
                                 </div>
                             </div>
                         </div>
                         <!-- Recibidos -->
-                        <div class="col-md-6">
-                            <div class="card border-0 shadow-sm h-100" style="border-left:4px solid var(--accent-blue)!important">
-                                <div class="card-body">
-                                    <h6 class="mb-3">
-                                        <i class="fas fa-arrow-circle-down me-2" style="color:var(--accent-blue)"></i>
-                                        Recibidos
-                                    </h6>
-                                    <div class="row text-center g-2">
-                                        <div class="col-6">
-                                            <div class="p-2 rounded" style="background:rgba(255,255,255,0.05)">
-                                                <div class="fs-4 fw-bold" id="val-meta-rec">—</div>
-                                                <small class="text-muted">En Metadata SAT</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="p-2 rounded" style="background:rgba(255,255,255,0.05)">
-                                                <div class="fs-4 fw-bold" id="val-cfdi-rec">—</div>
-                                                <small class="text-muted">XMLs descargados</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="p-2 rounded bg-danger bg-opacity-10">
-                                                <div class="fs-5 fw-bold text-danger" id="val-falt-rec">—</div>
-                                                <small class="text-muted">🔴 Faltantes</small>
-                                            </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="p-2 rounded bg-info bg-opacity-10">
-                                                <div class="fs-5 fw-bold text-info" id="val-canc-rec">—</div>
-                                                <small class="text-muted">🔵 Cancelados</small>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <div style="background:var(--bg-card); border:1px solid var(--border-color); border-left:4px solid var(--accent-blue); border-radius:16px; padding:1.5rem;">
+                            <h6 style="margin-bottom:1rem;">
+                                <i class="fas fa-arrow-circle-down" style="color:var(--accent-blue); margin-right:0.5rem;"></i>
+                                Recibidos
+                            </h6>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; text-align:center;">
+                                <div style="background:rgba(255,255,255,0.05); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.5rem; font-weight:700;" id="val-meta-rec">—</div>
+                                    <small style="color:var(--text-secondary)">En Metadata SAT</small>
+                                </div>
+                                <div style="background:rgba(255,255,255,0.05); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.5rem; font-weight:700;" id="val-cfdi-rec">—</div>
+                                    <small style="color:var(--text-secondary)">XMLs descargados</small>
+                                </div>
+                                <div style="background:rgba(239,68,68,0.08); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.2rem; font-weight:700; color:var(--accent-red);" id="val-falt-rec">—</div>
+                                    <small style="color:var(--text-secondary)">Faltantes</small>
+                                </div>
+                                <div style="background:rgba(96,165,250,0.08); padding:0.75rem; border-radius:10px;">
+                                    <div style="font-size:1.2rem; font-weight:700; color:var(--accent-blue);" id="val-canc-rec">—</div>
+                                    <small style="color:var(--text-secondary)">Cancelados</small>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Barra de completitud -->
-                    <div class="card border-0 shadow-sm mb-4">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-bold"><i class="fas fa-chart-bar me-2"></i>Completitud Global</span>
-                                <span id="val-pct-label" class="fw-bold fs-5">—</span>
-                            </div>
-                            <div class="progress" style="height:18px;border-radius:9px">
-                                <div id="val-pct-bar" class="progress-bar progress-bar-striped"
-                                    role="progressbar" style="width:0%" aria-valuenow="0"
-                                    aria-valuemin="0" aria-valuemax="100"></div>
-                            </div>
+                    <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; padding:1.5rem; margin-bottom:1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                            <span style="font-weight:600;"><i class="fas fa-chart-bar" style="margin-right:0.5rem;"></i>Completitud Global</span>
+                            <span id="val-pct-label" style="font-weight:700; font-size:1.2rem;">—</span>
+                        </div>
+                        <div class="progress-bar-container" style="background:var(--bg-tertiary); border-radius:9px; height:18px; overflow:hidden;">
+                            <div id="val-pct-bar" class="progress-fill"
+                                style="width:0%; height:100%; border-radius:9px; transition:width 0.5s ease;"></div>
                         </div>
                     </div>
 
                     <!-- Tabla de incongruencias -->
-                    <div class="card border-0 shadow-sm">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                                <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Detalle de Incongruencias</h6>
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <select id="val-filtro-tipo" class="form-select form-select-sm" onchange="valFiltrar()" style="width:auto">
-                                        <option value="">Todos los tipos</option>
-                                        <option value="faltante">🔴 Faltantes</option>
-                                        <option value="cancelado">🔵 Cancelados</option>
-                                        <option value="monto">🟡 Monto diferente</option>
-                                    </select>
-                                    <select id="val-filtro-dir" class="form-select form-select-sm" onchange="valFiltrar()" style="width:auto">
-                                        <option value="">Emitidos y Recibidos</option>
-                                        <option value="emitido">📤 Emitidos</option>
-                                        <option value="recibido">📥 Recibidos</option>
-                                    </select>
-                                </div>
+                    <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; padding:1.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.75rem;">
+                            <h6 style="margin:0;"><i class="fas fa-exclamation-triangle" style="color:var(--accent-yellow); margin-right:0.5rem;"></i>Detalle de Incongruencias</h6>
+                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <select id="val-filtro-tipo" class="form-input" onchange="valFiltrar()" style="width:auto; padding:0.4rem 0.8rem; font-size:0.82rem;">
+                                    <option value="">Todos los tipos</option>
+                                    <option value="faltante">Faltantes</option>
+                                    <option value="cancelado">Cancelados</option>
+                                    <option value="monto">Monto diferente</option>
+                                </select>
+                                <select id="val-filtro-dir" class="form-input" onchange="valFiltrar()" style="width:auto; padding:0.4rem 0.8rem; font-size:0.82rem;">
+                                    <option value="">Emitidos y Recibidos</option>
+                                    <option value="emitido">Emitidos</option>
+                                    <option value="recibido">Recibidos</option>
+                                </select>
                             </div>
-                            <div class="table-responsive">
-                                <table class="table table-sm table-hover">
-                                    <thead>
-                                        <tr>
-                                            <th>Tipo</th>
-                                            <th>Dirección</th>
-                                            <th>UUID</th>
-                                            <th>RFC Emisor</th>
-                                            <th>Fecha</th>
-                                            <th>Diferencia</th>
-                                            <th>Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="val-inc-tbody">
-                                        <tr><td colspan="7" class="text-center text-muted py-3">Inicia una validación para ver resultados</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Dirección</th>
+                                        <th>UUID</th>
+                                        <th>RFC Emisor</th>
+                                        <th>Fecha</th>
+                                        <th>Diferencia</th>
+                                        <th>Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="val-inc-tbody">
+                                    <tr><td colspan="7" style="text-align:center; color:var(--text-secondary); padding:1.5rem;">Inicia una validación para ver resultados</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
                 <!-- Historial de validaciones -->
-                <div class="card border-0 shadow-sm mt-4">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="mb-0"><i class="fas fa-history me-2"></i>Historial de Validaciones</h6>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="valCargarHistorial()">
-                                <i class="fas fa-sync-alt"></i> Actualizar
-                            </button>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>RFC</th>
-                                        <th>Periodo</th>
-                                        <th>Fecha Validación</th>
-                                        <th>Estado</th>
-                                        <th>Completitud</th>
-                                        <th>Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="val-hist-tbody">
-                                    <tr><td colspan="6" class="text-center text-muted py-3">Sin validaciones anteriores</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+                <div style="background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; padding:1.5rem; margin-top:1.5rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h6 style="margin:0;"><i class="fas fa-history" style="margin-right:0.5rem;"></i>Historial de Validaciones</h6>
+                        <button class="btn btn-secondary btn-sm" onclick="valCargarHistorial()">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>RFC</th>
+                                    <th>Periodo</th>
+                                    <th>Fecha Validación</th>
+                                    <th>Estado</th>
+                                    <th>Completitud</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="val-hist-tbody">
+                                <tr><td colspan="6" style="text-align:center; color:var(--text-secondary); padding:1.5rem;">Sin validaciones anteriores</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -1481,8 +1415,8 @@
                     </button>
                 </div>
 
-                <!-- Filtros compartidos -->
-                <div class="audit-filters">
+                <!-- Filtros compartidos (visible solo en Salud Fiscal y Libro Mayor) -->
+                <div class="audit-filters" style="display:none;">
                     <div class="form-group">
                         <label class="form-label"><i class="fas fa-building"></i> RFC / Contribuyente</label>
                         <select class="form-input" id="audit-contribuyente">
@@ -1517,16 +1451,22 @@
 
                 <!-- Tabs Nav -->
                 <div class="audit-tabs-nav">
-                    <button class="audit-tab-btn active" id="tab-btn-salud" onclick="showAuditTab('salud')">
+                    <button class="audit-tab-btn" id="tab-btn-salud" onclick="showAuditTab('salud')" style="display:none">
                         <i class="fas fa-shield-check"></i> Salud Fiscal
                     </button>
-                    <button class="audit-tab-btn" id="tab-btn-libro-mayor" onclick="showAuditTab('libro-mayor')">
+                    <button class="audit-tab-btn" id="tab-btn-libro-mayor" onclick="showAuditTab('libro-mayor')" style="display:none">
                         <i class="fas fa-table"></i> Libro Mayor Fiscal
+                    </button>
+                    <button class="audit-tab-btn active" id="tab-btn-repositorio" onclick="showAuditTab('repositorio'); loadRepositorio();">
+                        <i class="fas fa-archive"></i> Repositorio
+                    </button>
+                    <button class="audit-tab-btn" id="tab-btn-comparacion" onclick="showAuditTab('comparacion'); initComparacion();">
+                        <i class="fas fa-columns"></i> Comparación
                     </button>
                 </div>
 
                 <!-- ── Panel: Salud Fiscal ── -->
-                <div id="audit-panel-salud" class="audit-tab-panel active">
+                <div id="audit-panel-salud" class="audit-tab-panel">
                     <div style="margin-bottom:1rem;">
                         <button class="btn btn-primary" onclick="runAuditoria()" id="btn-run-audit">
                             <i class="fas fa-search-dollar"></i> Ejecutar Auditoría
@@ -1561,6 +1501,111 @@
                             <div class="audit-placeholder-icon"><i class="fas fa-table"></i></div>
                             <h3>Selecciona RFC y período, luego carga el Libro Mayor</h3>
                             <p>Verás cada CFDI con la regla IVA que se aplica: PUE, PPD proporcional, Nota de Crédito, Cancelado, etc.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════
+                     Panel: Repositorio de Paquetes ZIP
+                ════════════════════════════════════════════════════════ -->
+                <div id="audit-panel-repositorio" class="audit-tab-panel active">
+
+                    <!-- Stats rápidas -->
+                    <div class="repo-stats-row">
+                        <div class="repo-stat">
+                            <span id="repo-total-pkgs">—</span>
+                            <label>Paquetes</label>
+                        </div>
+                        <div class="repo-stat repo-stat-ok">
+                            <span id="repo-procesados">—</span>
+                            <label>Procesados</label>
+                        </div>
+                        <div class="repo-stat repo-stat-warn">
+                            <span id="repo-pendientes">—</span>
+                            <label>Sin Procesar</label>
+                        </div>
+                        <div class="repo-stat">
+                            <span id="repo-total-size">—</span>
+                            <label>Tamaño Total</label>
+                        </div>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div class="repo-toolbar">
+                        <button class="btn btn-primary" onclick="loadRepositorio()">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                        <span class="repo-info-txt"><i class="fas fa-info-circle"></i>
+                            Los ZIPs descargados del SAT aparecen aquí. Puedes descargarlos o procesarlos individualmente.
+                        </span>
+                    </div>
+
+                    <!-- Lista de paquetes -->
+                    <div id="repo-pkg-list">
+                        <div class="audit-placeholder">
+                            <div class="audit-placeholder-icon"><i class="fas fa-archive"></i></div>
+                            <h3>Haz clic en "Actualizar" para cargar el repositorio</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══════════════════════════════════════════════════════
+                     Panel: Comparación Vista Espejo (Metadata vs XML)
+                ════════════════════════════════════════════════════════ -->
+                <div id="audit-panel-comparacion" class="audit-tab-panel">
+
+                    <!-- Selectores de reportes a comparar -->
+                    <div class="comp-toolbar" style="align-items:flex-end; flex-wrap:wrap; gap:1rem;">
+                        <div style="display:flex; flex-direction:column; gap:0.4rem; min-width:240px;">
+                            <label style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);">
+                                <i class="fas fa-table"></i> Reporte Metadata
+                            </label>
+                            <select class="form-input" id="comp-meta-select" style="font-size:0.82rem;">
+                                <option value="">— Sin reportes —</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:0.4rem; min-width:240px;">
+                            <label style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);">
+                                <i class="fas fa-file-invoice"></i> Reporte CFDI
+                            </label>
+                            <select class="form-input" id="comp-cfdi-select" style="font-size:0.82rem;">
+                                <option value="">— Sin reportes —</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:0.4rem; min-width:110px;">
+                            <label style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);">
+                                <i class="fas fa-calendar-alt"></i> Año
+                            </label>
+                            <select class="form-input" id="comp-year-select" style="font-size:0.82rem;">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="runComparacion()" id="btn-run-comp" style="align-self:flex-end;" disabled>
+                            <i class="fas fa-columns"></i> Comparar
+                        </button>
+                    </div>
+
+                    <!-- Leyenda de colores -->
+                    <div class="comp-legend">
+                        <span class="comp-legend-item comp-row-red"><i class="fas fa-times-circle"></i> UUID solo en un lado</span>
+                        <span class="comp-legend-item comp-row-yellow"><i class="fas fa-exclamation-triangle"></i> Total diferente</span>
+                        <span class="comp-legend-item comp-row-ok"><i class="fas fa-check-circle"></i> OK</span>
+                    </div>
+
+                    <!-- Badges de resumen (visibles solo tras comparar) -->
+                    <div id="comp-stats-row" class="comp-stats-row" style="display:none;">
+                        <span class="comp-badge comp-badge-ok"><i class="fas fa-check"></i> <b id="comp-ok">0</b> OK</span>
+                        <span class="comp-badge comp-badge-red"><i class="fas fa-times-circle"></i> <b id="comp-solo-meta">0</b> Solo Metadata</span>
+                        <span class="comp-badge comp-badge-red"><i class="fas fa-times-circle"></i> <b id="comp-solo-cfdi">0</b> Solo CFDI</span>
+                        <span class="comp-badge comp-badge-yellow"><i class="fas fa-exclamation-triangle"></i> <b id="comp-mismatch">0</b> Total diferente</span>
+                    </div>
+
+                    <!-- Tabla espejo -->
+                    <div id="comp-mirror-container">
+                        <div class="audit-placeholder">
+                            <div class="audit-placeholder-icon"><i class="fas fa-columns"></i></div>
+                            <h3>Verifica los reportes y ejecuta la comparación</h3>
+                            <p>Se cruzarán Reporte_Consolidado_Metadata_RyE vs Reporte_Consolidado_Cfdi_RyE por UUID</p>
                         </div>
                     </div>
                 </div>
@@ -1941,6 +1986,93 @@
                     </div>
                 </div>
 
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════
+             SECCIÓN MIS RFCs (CONTRIBUYENTES)
+             ══════════════════════════════════════════════════════════ -->
+        <section id="contribuyentes" style="display:none;">
+            <div class="clients-panel">
+                <!-- Header -->
+                <div class="clients-header">
+                    <div class="clients-header-left">
+                        <div class="clients-icon"><i class="fas fa-id-card"></i></div>
+                        <div>
+                            <h2 class="clients-title">Mis RFCs Registrados</h2>
+                            <p class="clients-subtitle">Administra los RFCs asociados a tu cuenta</p>
+                        </div>
+                    </div>
+                    <button class="btn-client-new" onclick="openContribModal()">
+                        <i class="fas fa-plus"></i> Agregar RFC
+                    </button>
+                </div>
+
+                <!-- Tabla de RFCs -->
+                <div id="contrib-table-wrap" style="margin-top:1.5rem;">
+                    <table class="audit-table" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th>RFC</th>
+                                <th>Nombre / Razón Social</th>
+                                <th>Régimen Fiscal</th>
+                                <th style="width:80px;text-align:center;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contrib-tbody">
+                            <tr><td colspan="4" style="text-align:center;padding:2rem;opacity:0.5;">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Modal: Agregar RFC -->
+            <div id="contrib-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeContribModal()">
+                <div class="modal-box" style="max-width:460px;">
+                    <div class="modal-header">
+                        <h3><i class="fas fa-id-card"></i> Agregar RFC</h3>
+                        <button onclick="closeContribModal()" class="modal-close-btn"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="modal-body" style="display:flex;flex-direction:column;gap:1rem;">
+                        <div>
+                            <label class="form-label">RFC *</label>
+                            <input id="contrib-rfc" type="text" class="form-input" placeholder="MESP9480407UD" maxlength="13" style="text-transform:uppercase;">
+                        </div>
+                        <div>
+                            <label class="form-label">Nombre / Razón Social *</label>
+                            <input id="contrib-nombre" type="text" class="form-input" placeholder="Juan Pérez López">
+                        </div>
+                        <div>
+                            <label class="form-label">Régimen Fiscal</label>
+                            <select id="contrib-regimen" class="form-input">
+                                <option value="">-- Seleccionar --</option>
+                                <option value="601">601 - General de Ley Personas Morales</option>
+                                <option value="603">603 - Personas Morales con Fines no Lucrativos</option>
+                                <option value="605">605 - Sueldos y Salarios</option>
+                                <option value="606">606 - Arrendamiento</option>
+                                <option value="607">607 - Régimen de Enajenación o Adquisición de Bienes</option>
+                                <option value="608">608 - Demás ingresos</option>
+                                <option value="610">610 - Residentes en el Extranjero</option>
+                                <option value="611">611 - Ingresos por Dividendos</option>
+                                <option value="612">612 - Personas Físicas con Actividades Empresariales</option>
+                                <option value="614">614 - Ingresos por intereses</option>
+                                <option value="615">615 - Régimen de los ingresos por obtención de premios</option>
+                                <option value="616">616 - Sin obligaciones fiscales</option>
+                                <option value="620">620 - Sociedades Cooperativas de Producción</option>
+                                <option value="621">621 - Incorporación Fiscal</option>
+                                <option value="622">622 - Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras</option>
+                                <option value="623">623 - Opcional para Grupos de Sociedades</option>
+                                <option value="624">624 - Coordinados</option>
+                                <option value="625">625 - Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas</option>
+                                <option value="626">626 - Régimen Simplificado de Confianza (RESICO)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:1.5rem;">
+                        <button class="btn-secondary" onclick="closeContribModal()">Cancelar</button>
+                        <button class="btn-primary" onclick="saveContribuyente()"><i class="fas fa-save"></i> Guardar</button>
+                    </div>
+                </div>
             </div>
         </section>
 

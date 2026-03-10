@@ -158,6 +158,20 @@ async function insertCFDI(parsed, contribuyenteId) {
   }
 }
 
+// Helper: valida que contribuyenteId pertenezca al usuario autenticado
+async function assertContribOwnership(contribuyenteId, userId) {
+  if (!contribuyenteId) return; // Sin contribuyente asignado, se permite (admin puede subir sin asignar)
+  const [rows] = await pool.query(
+    'SELECT id FROM contribuyentes WHERE id = ? AND usuario_id = ?',
+    [contribuyenteId, userId]
+  );
+  if (!rows.length) {
+    const err = new Error('El contribuyente indicado no pertenece a tu cuenta');
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
 // POST /api/upload/xml — upload and parse XML files
 router.post('/xml', upload.array('files', 100), async (req, res) => {
   try {
@@ -166,6 +180,17 @@ router.post('/xml', upload.array('files', 100), async (req, res) => {
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No se enviaron archivos' });
+    }
+
+    // Validar ownership del contribuyente antes de insertar
+    try {
+      await assertContribOwnership(contribuyenteId, req.user.id);
+    } catch (ownerErr) {
+      // Limpiar archivos subidos
+      for (const f of req.files) {
+        try { fs.unlinkSync(f.path); } catch (_) { /* cleanup */ }
+      }
+      return res.status(ownerErr.statusCode || 403).json({ error: ownerErr.message });
     }
 
     for (const file of req.files) {
@@ -204,6 +229,15 @@ router.post('/csv', upload.single('file'), async (req, res) => {
     }
 
     const contribuyenteId = req.body.contribuyente_id || null;
+
+    // Validar ownership del contribuyente antes de procesar
+    try {
+      await assertContribOwnership(contribuyenteId, req.user.id);
+    } catch (ownerErr) {
+      try { fs.unlinkSync(req.file.path); } catch (_) { /* cleanup */ }
+      return res.status(ownerErr.statusCode || 403).json({ error: ownerErr.message });
+    }
+
     const csvContent = fs.readFileSync(req.file.path, 'utf-8');
 
     let rows;

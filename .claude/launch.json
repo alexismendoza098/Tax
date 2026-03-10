@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "Backend (producción)",
+      "name": "Backend",
       "runtimeExecutable": "C:/Program Files/nodejs/node.exe",
-      "runtimeArgs": ["C:/xampp/htdocs/ETX/Tax/backend/server.js"],
+      "runtimeArgs": ["C:/Users/alexis/Desktop/ETaxes2/ETX2/Tax2/backend/server.js"],
       "port": 3000
     },
     {
-      "name": "Backend (dev - nodemon)",
+      "name": "Backend (dev)",
       "runtimeExecutable": "C:/Program Files/nodejs/npm.cmd",
       "runtimeArgs": ["run", "dev"],
       "port": 3000

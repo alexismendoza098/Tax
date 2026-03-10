@@ -938,4 +938,282 @@ router.delete('/limpiar', async (req, res) => {
   }
 });
 
+// =====================================================================
+// MÓDULO COMPARACIÓN — Vista Espejo: Metadata SAT vs XMLs procesados
+// GET /api/auditoria/comparar?paquete_id=X[&contribuyente_id=Y]
+// =====================================================================
+const fs_aud   = require('fs');
+const path_aud = require('path');
+const DOWNLOADS_DIR_AUD = path_aud.join(__dirname, '..', 'downloads');
+
+// Busca recursivamente un archivo por nombre
+function findFileAud(dir, filename) {
+  if (!fs_aud.existsSync(dir)) return null;
+  for (const item of fs_aud.readdirSync(dir)) {
+    const full = path_aud.join(dir, item);
+    if (fs_aud.statSync(full).isDirectory()) {
+      const found = findFileAud(full, filename);
+      if (found) return found;
+    } else if (item.toLowerCase() === filename.toLowerCase()) {
+      return full;
+    }
+  }
+  return null;
+}
+
+// Parsea el TXT de Metadata del SAT (separado por ~)
+function parseMetadataTxt(content) {
+  const lines = content.split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const MAP = {
+    Uuid: 'uuid', RfcEmisor: 'rfc_emisor', NombreEmisor: 'nombre_emisor',
+    RfcReceptor: 'rfc_receptor', NombreReceptor: 'nombre_receptor',
+    FechaEmision: 'fecha', Monto: 'total', EfectoComprobante: 'tipo',
+    Estatus: 'estado', FechaCancelacion: 'fecha_cancelacion'
+  };
+  const keys = lines[0].trim().split('~').map(h => MAP[h] || h.toLowerCase());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const vals = line.split('~');
+    const row = {};
+    keys.forEach((k, idx) => {
+      let v = (vals[idx] || '').trim();
+      if (k === 'total') v = parseFloat(v) || 0;
+      row[k] = v;
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Parsea un CSV de Reporte_Consolidado usando csv-parse/sync
+// Devuelve array de objetos con clave UUID normalizada a minúsculas
+function parseCsvReporte(filePath) {
+  const { parse } = require('csv-parse/sync');
+  const content = fs_aud.readFileSync(filePath, 'utf8');
+  const records = parse(content, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+    bom: true,
+  });
+  return records;
+}
+
+// Encuentra el último CSV consolidado por tipo (Metadata o Cfdi)
+// Ordena alfanuméricamente los archivos con padding, retorna la ruta completa del más reciente
+function findLatestReporte(tipo) {
+  if (!fs_aud.existsSync(DOWNLOADS_DIR_AUD)) return null;
+  const prefix = `reporte_consolidado_${tipo.toLowerCase()}_rye`;
+  const files = fs_aud.readdirSync(DOWNLOADS_DIR_AUD)
+    .filter(f => f.toLowerCase().startsWith(prefix) && f.toLowerCase().endsWith('.csv'))
+    .sort();   // orden alfanumérico con zero-padding = orden cronológico
+  return files.length ? path_aud.join(DOWNLOADS_DIR_AUD, files[files.length - 1]) : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/auditoria/estado-reportes
+// Verifica si existen reportes Metadata y Cfdi (busca el más reciente de cada tipo)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/estado-reportes', (req, res) => {
+  const resultado = {};
+  for (const tipo of ['Metadata', 'Cfdi']) {
+    const ruta = findLatestReporte(tipo);
+    if (ruta) {
+      const stat = fs_aud.statSync(ruta);
+      resultado[tipo.toLowerCase()] = {
+        existe: true,
+        nombre: path_aud.basename(ruta),
+        size: (stat.size / 1024).toFixed(2) + ' KB',
+        fecha: stat.mtime.toISOString().slice(0, 10),
+      };
+    } else {
+      resultado[tipo.toLowerCase()] = { existe: false, nombre: null, size: null, fecha: null };
+    }
+  }
+  res.json(resultado);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/auditoria/listar-reportes
+// Devuelve todos los CSVs consolidados disponibles por tipo (metadata y cfdi)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/listar-reportes', (req, res) => {
+  const result = { metadata: [], cfdi: [] };
+  if (!fs_aud.existsSync(DOWNLOADS_DIR_AUD)) return res.json(result);
+  const files = fs_aud.readdirSync(DOWNLOADS_DIR_AUD);
+  ['metadata', 'cfdi'].forEach(tipo => {
+    const prefix = `reporte_consolidado_${tipo}_rye`;
+    result[tipo] = files
+      .filter(f => f.toLowerCase().startsWith(prefix) && f.toLowerCase().endsWith('.csv'))
+      .sort()
+      .reverse()
+      .map(f => {
+        const stat = fs_aud.statSync(path_aud.join(DOWNLOADS_DIR_AUD, f));
+        return { nombre: f, fecha: stat.mtime.toLocaleDateString('es-MX') };
+      });
+  });
+  res.json(result);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/auditoria/años-reporte
+// Devuelve los años únicos presentes en un CSV de reporte consolidado
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/años-reporte', (req, res) => {
+  try {
+    const { filename } = req.query;
+    if (!filename || filename.includes('/') || filename.includes('\\'))
+      return res.status(400).json({ error: 'Nombre de archivo inválido' });
+    const filePath = path_aud.join(DOWNLOADS_DIR_AUD, filename);
+    if (!fs_aud.existsSync(filePath))
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    const records = parseCsvReporte(filePath);
+    const años = new Set();
+    records.forEach(r => {
+      const y = r['Año'] || r['año'] || String(r['Fecha'] || '').substring(0, 4);
+      if (/^\d{4}$/.test(String(y).trim())) años.add(String(y).trim());
+    });
+    res.json({ años: [...años].sort().reverse() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/auditoria/comparar
+// Compara Reporte_Consolidado_Metadata_RyE.csv vs Reporte_Consolidado_Cfdi_RyE.csv
+// en vista espejo por UUID. Acepta ?meta_csv=<nombre> y ?cfdi_csv=<nombre>
+// para comparar archivos específicos en lugar del más reciente.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/comparar', (req, res) => {
+  try {
+    const { meta_csv, cfdi_csv, year } = req.query;
+
+    // Validar que no contengan rutas (solo nombres de archivo)
+    if (meta_csv && (meta_csv.includes('/') || meta_csv.includes('\\'))) {
+      return res.status(400).json({ error: 'Nombre de archivo inválido' });
+    }
+    if (cfdi_csv && (cfdi_csv.includes('/') || cfdi_csv.includes('\\'))) {
+      return res.status(400).json({ error: 'Nombre de archivo inválido' });
+    }
+
+    // Usar archivo específico si se proporcionó, o el más reciente
+    const metadataCsvPath = meta_csv
+      ? path_aud.join(DOWNLOADS_DIR_AUD, meta_csv)
+      : findLatestReporte('Metadata');
+    const cfdiCsvPath = cfdi_csv
+      ? path_aud.join(DOWNLOADS_DIR_AUD, cfdi_csv)
+      : findLatestReporte('Cfdi');
+
+    // Validar existencia de ambos archivos
+    const faltanArchivos = [];
+    if (!metadataCsvPath) faltanArchivos.push('Reporte_Consolidado_Metadata_RyE*.csv');
+    if (!cfdiCsvPath)     faltanArchivos.push('Reporte_Consolidado_Cfdi_RyE*.csv');
+    if (faltanArchivos.length > 0) {
+      return res.status(404).json({
+        error: `Archivos no encontrados: ${faltanArchivos.join(', ')}. Procesa los paquetes correspondientes en el Paso 3.`,
+        faltantes: faltanArchivos,
+      });
+    }
+
+    // Parsear ambos CSVs
+    const metaRecords = parseCsvReporte(metadataCsvPath);
+    const cfdiRecords = parseCsvReporte(cfdiCsvPath);
+
+    // Detectar años únicos disponibles en Metadata (sin filtrar, para poblar el dropdown)
+    function getAvailableYears(records) {
+      const years = new Set();
+      records.forEach(r => {
+        const y = r['Año'] || r['año'] || String(r['Fecha'] || '').substring(0, 4);
+        if (y && /^\d{4}$/.test(String(y).trim())) years.add(String(y).trim());
+      });
+      return [...years].sort().reverse();
+    }
+    const availableYears = getAvailableYears(metaRecords);
+
+    // Si no se especifica year, usar el año más reciente del CSV automáticamente
+    const effectiveYear = year || (availableYears.length > 0 ? availableYears[0] : '');
+
+    // Filtrar por año si se especifica (columna 'Año' o fallback a primeros 4 chars de 'Fecha')
+    function filterByYear(records, yr) {
+      if (!yr) return records;
+      return records.filter(r => {
+        const rowYear = r['Año'] || r['año'] || String(r['Fecha'] || '').substring(0, 4);
+        return String(rowYear).trim() === String(yr).trim();
+      });
+    }
+    const metaFiltered = filterByYear(metaRecords, effectiveYear);
+    const cfdiFiltered = filterByYear(cfdiRecords, effectiveYear);
+
+    // Detectar columna UUID (puede llamarse "UUID", "uuid", "Uuid", "Folio Fiscal", etc.)
+    function findUuidKey(record) {
+      if (!record) return null;
+      const keys = Object.keys(record);
+      return keys.find(k => /^uuid$/i.test(k) || /folio.?fiscal/i.test(k)) || keys[0];
+    }
+
+    const metaUuidKey = findUuidKey(metaRecords[0]);
+    const cfdiUuidKey = findUuidKey(cfdiRecords[0]);
+
+    // Detectar columna Total
+    function findTotalKey(record) {
+      if (!record) return null;
+      const keys = Object.keys(record);
+      return keys.find(k => /^total$/i.test(k)) || null;
+    }
+
+    const metaTotalKey = findTotalKey(metaRecords[0]);
+    const cfdiTotalKey = findTotalKey(cfdiRecords[0]);
+
+    // Construir mapas UUID → fila (usando registros filtrados por año si aplica)
+    const metaMap = new Map(
+      metaFiltered.map(r => [(r[metaUuidKey] || '').toLowerCase().trim(), r])
+    );
+    const cfdiMap = new Map(
+      cfdiFiltered.map(r => [(r[cfdiUuidKey] || '').toLowerCase().trim(), r])
+    );
+
+    const allUUIDs = [...new Set([...metaMap.keys(), ...cfdiMap.keys()])].filter(u => u);
+
+    const filas = allUUIDs.map(uuid => {
+      const metadata = metaMap.get(uuid) || null;
+      const cfdi     = cfdiMap.get(uuid) || null;
+      const alertas  = [];
+
+      if (!metadata) alertas.push('solo_cfdi');
+      if (!cfdi)     alertas.push('solo_metadata');
+
+      if (metadata && cfdi && metaTotalKey && cfdiTotalKey) {
+        const totalMeta = parseFloat((metadata[metaTotalKey] || '0').toString().replace(/,/g, '')) || 0;
+        const totalCfdi = parseFloat((cfdi[cfdiTotalKey] || '0').toString().replace(/,/g, '')) || 0;
+        if (Math.abs(totalMeta - totalCfdi) > 0.01) alertas.push('total_mismatch');
+      }
+
+      if (alertas.length === 0) alertas.push('ok');
+
+      return { uuid, alertas, metadata, cfdi };
+    });
+
+    // Errores primero
+    filas.sort((a, b) => (a.alertas[0] === 'ok' ? 1 : 0) - (b.alertas[0] === 'ok' ? 1 : 0));
+
+    const stats = {
+      total_metadata:  metaFiltered.length,
+      total_cfdi:      cfdiFiltered.length,
+      ok:              filas.filter(r => r.alertas.includes('ok')).length,
+      solo_metadata:   filas.filter(r => r.alertas.includes('solo_metadata')).length,
+      solo_cfdi:       filas.filter(r => r.alertas.includes('solo_cfdi')).length,
+      total_mismatch:  filas.filter(r => r.alertas.includes('total_mismatch')).length,
+    };
+
+    res.json({ stats, filas, availableYears, effectiveYear });
+  } catch (e) {
+    console.error('[AUDITORIA/COMPARAR]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

@@ -118,9 +118,14 @@ router.delete('/solicitud/:id_solicitud', authMiddleware, adminMiddleware, async
     const { id_solicitud } = req.params;
     const { motivo = 'Eliminado por admin' } = req.body;
 
-    // 1. Obtener solicitud
+    // 1. Obtener solicitud — validar que pertenezca al usuario autenticado
     const [[sol]] = await conn.query(
-      'SELECT * FROM solicitudes_sat WHERE id_solicitud = ?', [id_solicitud]
+      `SELECT s.* FROM solicitudes_sat s
+       WHERE s.id_solicitud = ?
+         AND (s.usuario_id = ? OR (s.usuario_id IS NULL AND s.rfc IN (
+               SELECT rfc FROM contribuyentes WHERE usuario_id = ?
+             )))`,
+      [id_solicitud, req.user.id, req.user.id]
     );
     if (!sol) { await conn.rollback(); return res.status(404).json({ error: 'Solicitud no encontrada' }); }
 
@@ -200,7 +205,13 @@ router.delete('/cfdi/:uuid', authMiddleware, adminMiddleware, async (req, res) =
   try {
     await conn.beginTransaction();
 
-    const [[cfdi]] = await conn.query('SELECT * FROM comprobantes WHERE uuid = ?', [req.params.uuid]);
+    // Validar que el CFDI pertenezca al usuario autenticado
+    const [[cfdi]] = await conn.query(
+      `SELECT c.* FROM comprobantes c
+       INNER JOIN contribuyentes cnt ON c.contribuyente_id = cnt.id
+       WHERE c.uuid = ? AND cnt.usuario_id = ?`,
+      [req.params.uuid, req.user.id]
+    );
     if (!cfdi) { await conn.rollback(); return res.status(404).json({ error: 'CFDI no encontrado' }); }
 
     await moverAPapelera(conn, {

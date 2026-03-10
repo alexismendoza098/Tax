@@ -50,7 +50,7 @@ async function dashLoadKPIs() {
 
     // Gráfica de tendencia
     if (data.tendencia?.length) dashRenderTendencia(data.tendencia);
-  } catch (e) { showToast('Error dashboard: ' + e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', 'Error dashboard: ' + e.message); }
 }
 
 // ─── Estado de Resultados ─────────────────────────────────────
@@ -131,7 +131,7 @@ async function dashLoadFlujo() {
       flujoEl.className = fn >= 0 ? 'kpi-val text-success' : 'kpi-val text-danger';
     }
     if (data.alerta) {
-      showToast(data.alerta, 'warning');
+      showToast('warning', 'Alerta', data.alerta);
     }
   } catch (e) { console.warn('Flujo:', e.message); }
 }

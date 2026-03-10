@@ -50,7 +50,7 @@ async function activosLoadListado() {
     const total = data.filter(a => a.activo).length;
     const el = document.getElementById('activosCount');
     if (el) el.textContent = total;
-  } catch (e) { showToast('Error activos: ' + e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', 'Error activos: ' + e.message); }
 }
 
 async function activosLoadResumen() {
@@ -89,26 +89,26 @@ async function activosRegistrar() {
     tasa_depreciacion:parseFloat(document.getElementById('activoTasa')?.value || 0) / 100,
   };
   if (!data.descripcion || !data.tipo || !data.fecha_adquisicion || !data.costo_adquisicion) {
-    showToast('Completa todos los campos requeridos', 'error'); return;
+    showToast('error', 'Validación', 'Completa todos los campos requeridos'); return;
   }
   try {
     const r = await apiFetch('/activos', 'POST', data);
-    showToast(`Activo registrado. Tasa aplicada: ${(r.tasa_aplicada*100).toFixed(0)}% (Art. 34 LISR)`, 'success');
+    showToast('success', 'Activo registrado', `Tasa aplicada: ${(r.tasa_aplicada*100).toFixed(0)}% (Art. 34 LISR)`);
     form.reset();
     await activosLoadListado();
     await activosLoadResumen();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function activosCalcularDep() {
   try {
-    showToast('Calculando depreciaciones del periodo...', 'info');
+    showToast('info', 'Procesando', 'Calculando depreciaciones del periodo...');
     const r = await apiFetch('/activos/calcular-dep', 'POST',
       { year: activosYearSel, mes: activosMesSel });
-    showToast(`Depreciación calculada: $${r.total_depreciacion_periodo} en ${r.activos_calculados} activos`, 'success');
+    showToast('success', 'Depreciación calculada', `$${r.total_depreciacion_periodo} en ${r.activos_calculados} activos`);
     await activosLoadListado();
     await activosLoadResumen();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function activosVerHistorial(id) {
@@ -124,7 +124,7 @@ async function activosVerHistorial(id) {
         <td class="text-right money ${parseFloat(d.saldo_por_depreciar) <= 0 ? 'text-danger' : ''}">${fmtMXN(d.saldo_por_depreciar)}</td>
       </tr>`).join('')}</tbody></table>`;
     showModal('Historial de Depreciaciones', html);
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function activosDarBaja(id) {
@@ -135,9 +135,9 @@ async function activosDarBaja(id) {
       motivo_baja: motivo,
       fecha_baja: new Date().toISOString().slice(0,10)
     });
-    showToast('Activo dado de baja', 'success');
+    showToast('success', 'Baja registrada', 'Activo dado de baja correctamente');
     await activosLoadListado();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 // Auto-llenar tasa cuando cambia tipo
@@ -190,39 +190,39 @@ async function papeleraLoadListado() {
           ${r.expirado ? `<button class="btn-xs btn-danger" onclick="papeleraEliminarDefinitivo(${r.id})">Purgar</button>` : '<span class="badge-retencion">Retenido</span>'}
         </td>
       </tr>`).join('') : '<tr><td colspan="8" class="text-center muted">Papelera vacía.</td></tr>';
-  } catch (e) { showToast('Error papelera: ' + e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', 'Error papelera: ' + e.message); }
 }
 
 async function papeleraPurgar() {
   if (!confirm('¿Eliminar definitivamente todos los registros expirados (>5 años)?')) return;
   try {
     const r = await apiFetch('/papelera/purgar', 'POST');
-    showToast(r.mensaje, 'success');
+    showToast('success', 'Papelera purgada', r.mensaje);
     await initPapelera();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function papeleraEliminarDefinitivo(id) {
   if (!confirm('¿Eliminar este registro definitivamente? Esta acción es irreversible.')) return;
   try {
     await apiFetch(`/papelera/${id}`, 'DELETE', { forzar: true });
-    showToast('Eliminado definitivamente', 'success');
+    showToast('success', 'Eliminado', 'Registro eliminado definitivamente');
     await initPapelera();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function papeleraEliminarSolicitud(idSolicitud) {
   if (!confirm(`¿Mover la solicitud ${idSolicitud} y sus CFDIs a la papelera?`)) return;
   try {
-    showToast('Moviendo a papelera...', 'info');
+    showToast('info', 'Procesando', 'Moviendo a papelera...');
     const r = await apiFetch(`/papelera/solicitud/${idSolicitud}`, 'DELETE', {
       motivo: 'Eliminado por usuario'
     });
-    showToast(`${r.cfdis_archivados} CFDIs archivados, ${r.archivos_eliminados} archivos eliminados`, 'success');
+    showToast('success', 'Archivado', `${r.cfdis_archivados} CFDIs archivados, ${r.archivos_eliminados} archivos eliminados`);
     await papeleraLoadStats();
     return true;
   } catch (e) {
-    showToast(e.message, 'error');
+    showToast('error', 'Error', e.message);
     return false;
   }
 }

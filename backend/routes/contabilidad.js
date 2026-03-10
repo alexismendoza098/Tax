@@ -258,7 +258,7 @@ router.get('/polizas', authMiddleware, async (req, res) => {
       LEFT JOIN poliza_movimientos pm ON pm.poliza_id = p.id
       WHERE ${where}
       GROUP BY p.id
-      ORDER BY p.fecha DESC, p.tipo_poliza, p.numero
+      ORDER BY p.created_at DESC, p.tipo_poliza, p.numero
     `, params);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }

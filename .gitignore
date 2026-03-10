@@ -49,6 +49,12 @@ backend/csharp/**/obj/
 # ── Archivos temporales de descarga ───────────────────────────────────────────
 backend/temp_descargas*.txt
 
+# ── Binarios y herramientas externas ──────────────────────────────────────────
+ngrok.exe
+ngrok
+*.zip
+ngrok-*.zip
+
 # ── Uploads temporales (archivos procesados, no datos de usuario) ─────────────
 backend/uploads/temp_flatten/
 backend/uploads/certs/

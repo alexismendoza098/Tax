@@ -128,8 +128,8 @@ router.get('/resumen-iva', authMiddleware, async (req, res) => {
     // ── Nómina (ISR deducible) ───────────────────────────────────────────────
     const [[nomina]] = await pool.query(`
       SELECT COUNT(*) AS total_nominas, ROUND(SUM(total),2) AS monto_nomina
-      FROM comprobantes
-      WHERE contribuyente_id = ? AND tipo_de_comprobante = 'N'
+      FROM comprobantes c
+      WHERE c.contribuyente_id = ? AND c.tipo_de_comprobante = 'N'
         ${df.sql}
     `, [contribId, ...df.params]);
 
@@ -198,7 +198,8 @@ router.get('/estado-sat', authMiddleware, async (req, res) => {
     const contribId = contribuyente_id || await getContribuyenteId(req.user.id, rfc);
     if (!contribId) return res.json({ alertas: [], score: 100 });
 
-    const yearFilter = year ? `AND YEAR(c.fecha) = ${parseInt(year)}` : '';
+    const yearVal = parseInt(year);
+    const yearFilter = year && !isNaN(yearVal) ? `AND YEAR(c.fecha) = ${yearVal}` : '';
     const alertas = [];
 
     // 1. Facturas PPD sin complemento de pago
@@ -370,7 +371,8 @@ router.get('/deducibilidad', authMiddleware, async (req, res) => {
     const contribId = contribuyente_id || await getContribuyenteId(req.user.id, rfc);
     if (!contribId) return res.json({ error: 'Sin contribuyente' });
 
-    const yearFilter = year ? `AND YEAR(fecha) = ${parseInt(year)}` : '';
+    const yearVal = parseInt(year);
+    const yearFilter = year && !isNaN(yearVal) ? `AND YEAR(fecha) = ${yearVal}` : '';
 
     // Ingresos totales (emitidos)
     const [[ingresos]] = await pool.query(`
@@ -460,7 +462,8 @@ router.get('/declaracion-previa', authMiddleware, async (req, res) => {
     const contribId = contribuyente_id || await getContribuyenteId(req.user.id, rfc);
     if (!contribId) return res.json({ error: 'Sin contribuyente' });
 
-    const yearFilter = year ? `AND YEAR(fecha) = ${parseInt(year)}` : '';
+    const yearVal = parseInt(year);
+    const yearFilter = year && !isNaN(yearVal) ? `AND YEAR(fecha) = ${yearVal}` : '';
     const [[contrib]] = await pool.query('SELECT rfc, nombre FROM contribuyentes WHERE id = ?', [contribId]);
 
     // Resumen mes a mes

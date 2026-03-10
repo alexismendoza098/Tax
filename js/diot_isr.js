@@ -34,7 +34,7 @@ async function diotLoadListado() {
           <button class="btn-xs btn-success" onclick="diotDescargarExcel(${d.periodo_year},${d.periodo_mes})">Excel</button>
         </td>
       </tr>`).join('') : '<tr><td colspan="7" class="text-center muted">Sin periodos calculados.</td></tr>';
-  } catch (e) { showToast('Error DIOT: ' + e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', 'Error DIOT: ' + e.message); }
 }
 
 async function diotLoadDetalle() {
@@ -58,13 +58,13 @@ async function diotLoadDetalle() {
 
 async function diotGenerar() {
   try {
-    showToast('Calculando DIOT...', 'info');
+    showToast('info', 'Procesando', 'Calculando DIOT...');
     const r = await apiFetch('/diot/generar', 'POST',
       { year: diotYearSel, mes: diotMesSel });
-    showToast(`DIOT generado: ${r.proveedores} proveedores, ${r.cfdis_procesados} CFDIs`, 'success');
+    showToast('success', 'DIOT generado', `${r.proveedores} proveedores, ${r.cfdis_procesados} CFDIs`);
     await diotLoadListado();
     await diotLoadDetalle();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 function diotDescargarTXT(year, mes) {
@@ -114,8 +114,8 @@ async function isrGuardarConfig() {
       tasa_isr: parseFloat(document.getElementById('isrTasa')?.value || 30),
       coeficiente_utilidad: parseFloat(document.getElementById('isrCoeficiente')?.value || 0),
     });
-    showToast('Configuración ISR guardada', 'success');
-  } catch (e) { showToast(e.message, 'error'); }
+    showToast('success', 'Guardado', 'Configuración ISR guardada');
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function isrLoadListado() {
@@ -138,7 +138,7 @@ async function isrLoadListado() {
           </button>
         </td>
       </tr>`).join('') : '<tr><td colspan="8" class="text-center muted">Sin cálculos. Genera el ISR del periodo.</td></tr>';
-  } catch (e) { showToast('Error ISR: ' + e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', 'Error ISR: ' + e.message); }
 }
 
 async function isrLoadDetalle() {
@@ -206,14 +206,14 @@ async function isrLoadAnual() {
 
 async function isrCalcular() {
   try {
-    showToast('Calculando ISR...', 'info');
+    showToast('info', 'Procesando', 'Calculando ISR...');
     const r = await apiFetch('/isr/calcular', 'POST',
       { year: isrYearSel, mes: isrMesSel });
-    showToast(`ISR calculado. A pagar: ${fmtMXN(r.datos.isr_a_pagar)}`, 'success');
+    showToast('success', 'ISR calculado', `A pagar: ${fmtMXN(r.datos.isr_a_pagar)}`);
     await isrLoadListado();
     await isrLoadDetalle();
     await isrLoadAnual();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function isrMarcarPagado(year, mes) {
@@ -224,9 +224,9 @@ async function isrMarcarPagado(year, mes) {
       fecha_pago: new Date().toISOString().slice(0,10),
       referencia_pago: ref || null
     });
-    showToast('Marcado como pagado', 'success');
+    showToast('success', 'ISR', 'Marcado como pagado');
     await isrLoadListado();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 function isrCambiarPeriodo() {

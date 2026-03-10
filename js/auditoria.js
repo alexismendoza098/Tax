@@ -641,10 +641,16 @@ document.addEventListener('DOMContentLoaded', fillAuditYears);
 function showAuditTab(tab) {
   document.querySelectorAll('.audit-tab-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.audit-tab-panel').forEach(p => p.classList.remove('active'));
-  const btn = document.getElementById(`tab-btn-${tab}`);
+  const btn   = document.getElementById(`tab-btn-${tab}`);
   const panel = document.getElementById(`audit-panel-${tab}`);
   if (btn)   btn.classList.add('active');
   if (panel) panel.classList.add('active');
+
+  // Filtros compartidos (RFC / Año / Mes) solo aplican en Salud Fiscal y Libro Mayor
+  const filtrosDiv = document.querySelector('.audit-filters');
+  if (filtrosDiv) {
+    filtrosDiv.style.display = (tab === 'salud' || tab === 'libro-mayor') ? '' : 'none';
+  }
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -1064,4 +1070,629 @@ function exportLibroMayorCSV() {
   URL.revokeObjectURL(url);
 
   showToast('success', 'CSV Exportado', `${data.cfdi.length} registros · ${filename}`);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// MÓDULO REPOSITORIO — Gestión de paquetes ZIP descargados del SAT
+// ═════════════════════════════════════════════════════════════════════
+
+const RepositorioModule = {
+  packages: [],
+  lastUpdate: null,
+};
+
+async function loadRepositorio() {
+  const container = document.getElementById('repo-pkg-list');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="audit-placeholder">
+      <div class="audit-placeholder-icon"><i class="fas fa-spinner fa-spin"></i></div>
+      <h3>Cargando repositorio...</h3>
+    </div>`;
+
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_URL}/flatten/packages`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    const packages = await res.json();
+
+    RepositorioModule.packages = packages;
+    RepositorioModule.lastUpdate = new Date();
+
+    // Stats
+    const processed = packages.filter(p => p.processed).length;
+    const pending   = packages.length - processed;
+    let totalBytes  = packages.reduce((sum, p) => {
+      const kb = parseFloat(p.size) || 0;
+      return sum + kb;
+    }, 0);
+    const sizeLabel = totalBytes > 1024
+      ? (totalBytes / 1024).toFixed(1) + ' MB'
+      : totalBytes.toFixed(0) + ' KB';
+
+    document.getElementById('repo-total-pkgs').textContent  = packages.length;
+    document.getElementById('repo-procesados').textContent  = processed;
+    document.getElementById('repo-pendientes').textContent  = pending;
+    document.getElementById('repo-total-size').textContent  = sizeLabel;
+
+    renderRepositorio(packages);
+
+    // Refrescar selectores de comparación si hay nuevos reportes
+    initComparacion();
+
+  } catch (e) {
+    container.innerHTML = `
+      <div class="audit-placeholder">
+        <div class="audit-placeholder-icon" style="color:#f87171;"><i class="fas fa-exclamation-triangle"></i></div>
+        <h3 style="color:#f87171;">Error al cargar el repositorio</h3>
+        <p>${e.message}</p>
+      </div>`;
+    showToast('error', 'Repositorio', e.message);
+  }
+}
+
+function renderRepositorio(packages) {
+  const container = document.getElementById('repo-pkg-list');
+  if (!packages.length) {
+    container.innerHTML = `
+      <div class="audit-placeholder">
+        <div class="audit-placeholder-icon"><i class="fas fa-box-open"></i></div>
+        <h3>No hay paquetes en el repositorio</h3>
+        <p>Descarga paquetes desde el Módulo SAT y aparecerán aquí</p>
+      </div>`;
+    return;
+  }
+
+  const rows = packages.map(pkg => {
+    const badge = pkg.processed
+      ? '<span class="repo-badge repo-badge-ok">Procesado</span>'
+      : '<span class="repo-badge repo-badge-warn">Sin procesar</span>';
+    const date = pkg.date ? new Date(pkg.date).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+    const typeIcon = pkg.name.endsWith('.txt') ? 'fa-file-alt' : 'fa-file-archive';
+    const typeLabel = pkg.type || (pkg.name.endsWith('.txt') ? 'Metadata' : 'CFDI');
+
+    return `
+      <div class="repo-pkg-card">
+        <div class="repo-pkg-icon">
+          <i class="fas ${typeIcon}"></i>
+        </div>
+        <div class="repo-pkg-info">
+          <div class="repo-pkg-name" title="${pkg.name}">${pkg.name}</div>
+          <div class="repo-pkg-meta">
+            <span><i class="fas fa-tag"></i> ${typeLabel}</span>
+            <span><i class="fas fa-weight-hanging"></i> ${pkg.size}</span>
+            <span><i class="fas fa-calendar"></i> ${date}</span>
+          </div>
+        </div>
+        <div class="repo-pkg-status">${badge}</div>
+        <div class="repo-pkg-actions">
+          <button class="btn-xs btn-info" onclick="downloadZip('${pkg.name}')" title="Descargar ZIP">
+            <i class="fas fa-download"></i> Descargar
+          </button>
+          <button class="btn-xs btn-danger" onclick="deleteZipFromRepo('${pkg.name}')" title="Eliminar">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="repo-pkg-list-inner">${rows}</div>`;
+}
+
+async function downloadZip(filename) {
+  try {
+    const token = localStorage.getItem('token');
+    const url = `${API_URL}/flatten/download/${encodeURIComponent(filename)}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('success', 'Descarga', `${filename} descargado correctamente`);
+  } catch (e) {
+    showToast('error', 'Error al descargar', e.message);
+  }
+}
+
+async function deleteZipFromRepo(filename) {
+  if (!confirm(`¿Eliminar "${filename}" del repositorio? Esta acción es irreversible.`)) return;
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_URL}/flatten/delete`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ packageIds: [filename] })
+    });
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    showToast('success', 'Eliminado', `${filename} eliminado del repositorio`);
+    await loadRepositorio();
+  } catch (e) {
+    showToast('error', 'Error al eliminar', e.message);
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// MÓDULO COMPARACIÓN — Vista Espejo: Metadata SAT vs XMLs procesados
+// ═════════════════════════════════════════════════════════════════════
+
+const ComparacionModule = {
+  data: null,
+  filtroAlerta: 'todos',
+  filtroAño: '',
+};
+
+// Pobla un <select> con la lista de CSVs disponibles
+function _poblarSelectReportes(selectId, items) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  if (!items || items.length === 0) {
+    sel.innerHTML = '<option value="">— Sin reportes disponibles —</option>';
+    return;
+  }
+  sel.innerHTML = items.map((it, i) =>
+    `<option value="${it.nombre}"${i === 0 ? ' selected' : ''}>${it.nombre} · ${it.fecha}</option>`
+  ).join('');
+}
+
+// Cambia el filtro de año y re-ejecuta la comparación (usado por los chips del banner)
+function _filtrarPorAño(year) {
+  const sel = document.getElementById('comp-year-select');
+  if (sel) sel.value = year;
+  runComparacion();
+}
+
+// Carga los años disponibles en el CSV de Metadata y puebla el dropdown #comp-year-select
+async function _actualizarAñosComparacion(metaFilename) {
+  const yearSel = document.getElementById('comp-year-select');
+  if (!yearSel || !metaFilename) return;
+  try {
+    const token = localStorage.getItem('token');
+    const r = await fetch(
+      `${API_URL}/auditoria/años-reporte?filename=${encodeURIComponent(metaFilename)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!r.ok) return;
+    const { años } = await r.json();
+    if (años.length > 0) {
+      // Auto-seleccionar el primer año (más reciente); mover "Todos" al final
+      yearSel.innerHTML =
+        años.map((y, i) => `<option value="${y}"${i === 0 ? ' selected' : ''}>${y}</option>`).join('') +
+        '<option value="">— Todos los años —</option>';
+    } else {
+      yearSel.innerHTML = '<option value="">Todos los años</option>';
+    }
+  } catch (_) {}
+}
+
+async function initComparacion() {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_URL}/auditoria/listar-reportes`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const listas = await res.json();
+      _poblarSelectReportes('comp-meta-select', listas.metadata);
+      _poblarSelectReportes('comp-cfdi-select', listas.cfdi);
+      const btn = document.getElementById('btn-run-comp');
+      if (btn) btn.disabled = !listas.metadata.length || !listas.cfdi.length;
+
+      // Poblar años del primer Metadata disponible
+      const firstMeta = listas.metadata[0]?.nombre;
+      if (firstMeta) await _actualizarAñosComparacion(firstMeta);
+
+      // Refrescar años cuando el usuario cambia el selector de Metadata
+      const metaSel = document.getElementById('comp-meta-select');
+      if (metaSel && !metaSel._yearListenerAdded) {
+        metaSel.addEventListener('change', () => _actualizarAñosComparacion(metaSel.value));
+        metaSel._yearListenerAdded = true;
+      }
+    }
+  } catch (_) {}
+}
+
+async function runComparacion() {
+  ComparacionModule.filtroAño = '';  // resetear filtro de año al iniciar nueva comparación
+  const container = document.getElementById('comp-mirror-container');
+  const statsRow  = document.getElementById('comp-stats-row');
+  if (statsRow) statsRow.style.display = 'none';
+
+  container.innerHTML = `
+    <div class="audit-placeholder">
+      <div class="audit-placeholder-icon"><i class="fas fa-spinner fa-spin"></i></div>
+      <h3>Cruzando Metadata vs CFDI por UUID...</h3>
+    </div>`;
+
+  const btn = document.getElementById('btn-run-comp');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Comparando...'; }
+
+  try {
+    const token = localStorage.getItem('token');
+    const metaCsv = document.getElementById('comp-meta-select')?.value;
+    const cfdiCsv = document.getElementById('comp-cfdi-select')?.value;
+    const year    = document.getElementById('comp-year-select')?.value;
+    const params  = new URLSearchParams();
+    if (metaCsv) params.set('meta_csv', metaCsv);
+    if (cfdiCsv) params.set('cfdi_csv', cfdiCsv);
+    if (year)    params.set('year', year);
+    const res = await fetch(`${API_URL}/auditoria/comparar?${params}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || `Error ${res.status}`);
+    }
+    const data = await res.json();
+
+    ComparacionModule.data = data;
+
+    // Sincronizar dropdown con el año efectivo que aplicó el backend
+    if (data.effectiveYear) {
+      const yearSel = document.getElementById('comp-year-select');
+      if (yearSel && !yearSel.value) yearSel.value = data.effectiveYear;
+    }
+
+    renderMirrorTable(data);
+
+    // Banner de chips de año — aparece si el archivo tiene datos de múltiples años
+    const oldBanner = document.getElementById('comp-year-banner');
+    if (oldBanner) oldBanner.remove();
+    if (data.availableYears?.length > 1) {
+      const currentYear = document.getElementById('comp-year-select')?.value || '';
+      const chipsHtml = data.availableYears.map(y =>
+        `<button class="comp-year-chip${y === currentYear ? ' active' : ''}" onclick="_filtrarPorAño('${y}')">${y}</button>`
+      ).join('');
+      const banner = document.createElement('div');
+      banner.id = 'comp-year-banner';
+      banner.style.cssText = 'display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;padding:0.6rem 1rem;background:var(--surface-2,#1e293b);border-radius:8px;border:1px solid var(--border,#334155);font-size:0.82rem;';
+      banner.innerHTML = `<i class="fas fa-info-circle" style="color:var(--accent-blue,#38bdf8);"></i>
+        <span style="color:var(--text-secondary);">Años en este reporte:</span>
+        ${chipsHtml}
+        <button class="comp-year-chip${currentYear === '' ? ' active' : ''}" onclick="_filtrarPorAño('')">Todos</button>`;
+      const container = document.getElementById('comp-mirror-container');
+      if (container) container.insertBefore(banner, container.firstChild);
+    }
+
+    // Mostrar stats
+    if (statsRow) {
+      document.getElementById('comp-ok').textContent        = data.stats.ok;
+      document.getElementById('comp-solo-meta').textContent = data.stats.solo_metadata;
+      document.getElementById('comp-solo-cfdi').textContent = data.stats.solo_cfdi;
+      document.getElementById('comp-mismatch').textContent  = data.stats.total_mismatch;
+      statsRow.style.display = 'flex';
+    }
+
+  } catch (e) {
+    container.innerHTML = `
+      <div class="audit-placeholder">
+        <div class="audit-placeholder-icon" style="color:#f87171;"><i class="fas fa-exclamation-triangle"></i></div>
+        <h3 style="color:#f87171;">Error en la comparación</h3>
+        <p>${e.message}</p>
+      </div>`;
+    showToast('error', 'Error en comparación', e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-columns"></i> Comparar'; }
+  }
+}
+
+function renderMirrorTable(data) {
+  const container = document.getElementById('comp-mirror-container');
+  const { filas, stats } = data;
+  const total = filas.length;
+
+  if (!filas.length) {
+    container.innerHTML = `
+      <div class="audit-placeholder">
+        <div class="audit-placeholder-icon"><i class="fas fa-check-circle" style="color:#4ade80;"></i></div>
+        <h3>Sin registros en los reportes</h3>
+        <p>Los archivos Metadata y CFDI están vacíos o sin UUIDs</p>
+      </div>`;
+    return;
+  }
+
+  // Opciones de filtro
+  const filterBar = `
+    <div class="comp-filter-bar">
+      <span class="comp-filter-label">Filtrar:</span>
+      <button class="comp-filter-btn active" data-filter="todos"          onclick="filterMirrorTable('todos')">Todos (${total})</button>
+      <button class="comp-filter-btn" data-filter="errores"               onclick="filterMirrorTable('errores')">Con alertas (${total - stats.ok})</button>
+      <button class="comp-filter-btn" data-filter="ok"                    onclick="filterMirrorTable('ok')"><i class="fas fa-check"></i> OK (${stats.ok})</button>
+      <button class="comp-filter-btn comp-filter-red" data-filter="solo_metadata" onclick="filterMirrorTable('solo_metadata')">Solo Metadata (${stats.solo_metadata})</button>
+      <button class="comp-filter-btn comp-filter-red" data-filter="solo_cfdi"     onclick="filterMirrorTable('solo_cfdi')">Solo CFDI (${stats.solo_cfdi})</button>
+      <button class="comp-filter-btn comp-filter-yellow" data-filter="total_mismatch" onclick="filterMirrorTable('total_mismatch')">Total ≠ (${stats.total_mismatch})</button>
+    </div>`;
+
+  // Cabecera de la tabla espejo — colspan 6 por lado (+ 2 cols IVA)
+  const thead = `
+    <thead>
+      <tr class="mirror-header-main">
+        <th colspan="6" class="mirror-side-header mirror-left-header"><i class="fas fa-file-alt"></i> METADATA (Reporte_Consolidado_Metadata_RyE)</th>
+        <th class="mirror-uuid-col"></th>
+        <th colspan="6" class="mirror-side-header mirror-right-header"><i class="fas fa-file-invoice"></i> CFDI (Reporte_Consolidado_Cfdi_RyE)</th>
+        <th class="mirror-alert-col"></th>
+      </tr>
+      <tr class="mirror-header-sub">
+        <th>RFC Emisor</th>
+        <th class="mirror-th-fecha">Fecha
+          <select id="mirror-year-filter" class="mirror-year-select"
+                  onchange="filterMirrorByYear(this.value)" title="Filtrar por año">
+            <option value="">Todos</option>
+          </select>
+        </th>
+        <th>Total</th>
+        <th class="mirror-iva-col">IVA Trsd.</th>
+        <th class="mirror-iva-col">IVA Acred.</th>
+        <th>Estado</th>
+        <th class="mirror-uuid-col">UUID</th>
+        <th>RFC Emisor</th>
+        <th>Fecha</th>
+        <th>Total</th>
+        <th class="mirror-iva-col">IVA Trsd.</th>
+        <th class="mirror-iva-col">IVA Acred.</th>
+        <th>Estado</th>
+        <th>Alertas</th>
+      </tr>
+    </thead>`;
+
+  // Construir tbody agrupando por Año → Mes con filas de totales de período
+  const _fmtM = (v) => new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN' })
+                          .format(parseFloat((v || '0').toString().replace(/,/g, '')) || 0);
+  const _sumField = (rows, side, ...keys) => rows.reduce((acc, r) => {
+    const v = r[side] ? _getCol(r[side], ...keys) : null;
+    return acc + (parseFloat(String(v || '0').replace(/,/g, '')) || 0);
+  }, 0);
+
+  // Ordenar filas por fecha ascendente
+  const sortedFilas = [...filas].sort((a, b) => {
+    const fa = String(_getCol(a.metadata || {}, 'Fecha', 'fecha', 'FechaEmision') || '').slice(0, 10);
+    const fb = String(_getCol(b.metadata || {}, 'Fecha', 'fecha', 'FechaEmision') || '').slice(0, 10);
+    return fa.localeCompare(fb);
+  });
+
+  // Agrupar por año → mes
+  const byYear = {};
+  sortedFilas.forEach(r => {
+    const fecha = _getCol(r.metadata || {}, 'Fecha', 'fecha', 'FechaEmision') || '';
+    const yr    = String(fecha).slice(0, 4) || '----';
+    const ym    = String(fecha).slice(0, 7) || '----';
+    if (!byYear[yr])      byYear[yr]      = {};
+    if (!byYear[yr][ym])  byYear[yr][ym]  = [];
+    byYear[yr][ym].push(r);
+  });
+
+  let tbodyHtml = '';
+  Object.keys(byYear).sort().forEach(yr => {
+    const months       = byYear[yr];
+    const allYearRows  = Object.values(months).flat();
+    const monthKeys    = Object.keys(months).sort();
+
+    monthKeys.forEach(ym => {
+      // Filas del mes
+      months[ym].forEach(r => { tbodyHtml += buildMirrorRow(r); });
+      // Subtotal mensual (solo si el año tiene más de un mes)
+      if (monthKeys.length > 1) {
+        tbodyHtml += buildPeriodTotalRow(ym, months[ym], 'month', _sumField, _fmtM);
+      }
+    });
+    // Total anual
+    tbodyHtml += buildPeriodTotalRow(yr, allYearRows, 'year', _sumField, _fmtM);
+  });
+
+  const tbody = `<tbody id="mirror-table-body">${tbodyHtml}</tbody>`;
+
+  container.innerHTML = filterBar + `
+    <div class="mirror-table-wrap">
+      <table class="mirror-table" id="mirror-table">${thead}${tbody}</table>
+    </div>`;
+
+  // Poblar el select de año con los valores únicos presentes en las filas
+  const yearSelect = document.getElementById('mirror-year-filter');
+  if (yearSelect) {
+    const years = [...new Set(
+      filas
+        .map(r => {
+          const f = r.metadata
+            ? (_getCol(r.metadata, 'Fecha', 'fecha', 'FechaEmision') || '')
+            : '';
+          return String(f).slice(0, 4);
+        })
+        .filter(y => /^\d{4}$/.test(y))
+    )].sort();
+    years.forEach(y => {
+      const opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      yearSelect.appendChild(opt);
+    });
+
+    if (ComparacionModule.filtroAño) {
+      // Restaurar filtro activo si ya había uno (ej: al cambiar el filtro de alerta)
+      yearSelect.value = ComparacionModule.filtroAño;
+    } else if (years.length > 1) {
+      // Auto-seleccionar el año más reciente y aplicar el filtro de inmediato
+      const latestYear = years[years.length - 1];
+      yearSelect.value = latestYear;
+      ComparacionModule.filtroAño = latestYear;
+      _applyMirrorFilters();
+    }
+  }
+}
+
+// Busca un valor en un objeto de fila usando múltiples posibles nombres de columna
+function _getCol(row, ...keys) {
+  if (!row) return null;
+  for (const k of keys) {
+    const found = Object.keys(row).find(c => c.toLowerCase() === k.toLowerCase());
+    if (found && row[found] != null && row[found] !== '') return row[found];
+  }
+  return null;
+}
+
+// Genera una fila de resumen (total mensual o anual) para la tabla espejo
+// label   = 'YYYY' (año) o 'YYYY-MM' (mes)
+// rows    = array de filas del período
+// type    = 'year' | 'month'
+// sumFn   = función _sumField inyectada (evita dependencia circular)
+// fmtFn   = función de formateo de moneda inyectada
+function buildPeriodTotalRow(label, rows, type, sumFn, fmtFn) {
+  const isYear = type === 'year';
+  const yr     = label.slice(0, 4);
+  const icon   = isYear ? 'calendar-check' : 'calendar-day';
+  const cls    = isYear ? 'mirror-year-row' : 'mirror-month-row';
+  const title  = isYear ? `Total ${label}` : label;
+
+  const mTot  = fmtFn(sumFn(rows, 'metadata', 'Total',       'total',       'Monto'));
+  const mTrs  = fmtFn(sumFn(rows, 'metadata', ..._IVA_TRAS_KEYS));
+  const mAcr  = fmtFn(sumFn(rows, 'metadata', ..._IVA_ACRED_KEYS));
+  const cTot  = fmtFn(sumFn(rows, 'cfdi',     'Total',       'total',       'Monto'));
+  const cTrs  = fmtFn(sumFn(rows, 'cfdi',     ..._IVA_TRAS_KEYS));
+  const cAcr  = fmtFn(sumFn(rows, 'cfdi',     ..._IVA_ACRED_KEYS));
+
+  return `
+    <tr class="mirror-period-row ${cls}" data-year="${yr}" data-period="${label}">
+      <td colspan="2" class="period-label">
+        <i class="fas fa-${icon}"></i> ${title}
+        <span style="font-weight:400;font-size:0.72rem;opacity:0.7;"> — ${rows.length} reg.</span>
+      </td>
+      <td class="money period-total">${mTot}</td>
+      <td class="money period-total mirror-iva-col">${mTrs}</td>
+      <td class="money period-total mirror-iva-col">${mAcr}</td>
+      <td></td>
+      <td class="mirror-uuid-col"></td>
+      <td colspan="2"></td>
+      <td class="money period-total">${cTot}</td>
+      <td class="money period-total mirror-iva-col">${cTrs}</td>
+      <td class="money period-total mirror-iva-col">${cAcr}</td>
+      <td></td>
+      <td></td>
+    </tr>`;
+}
+
+// Alias de columnas IVA — se intentan en orden hasta encontrar la que exista en el CSV
+const _IVA_TRAS_KEYS  = ['TotalTraslados', 'total_traslados', 'IvaTrasladado',
+                          'TotalIvaTrasladado', 'Trasladados', 'TotalImpuestosTrasladados'];
+const _IVA_ACRED_KEYS = ['TotalRetenciones', 'total_retenciones', 'IvaAcreditable',
+                          'TotalIvaAcreditable', 'Retenciones', 'TotalImpuestosRetenidos'];
+
+function buildMirrorRow(row) {
+  const { uuid, metadata, cfdi, alertas } = row;
+  const fmtMoney = (v) => {
+    const n = parseFloat((v || '0').toString().replace(/,/g, '')) || 0;
+    return new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN' }).format(n);
+  };
+  const fmtDate  = (d) => d ? String(d).slice(0, 10) : '—';
+  const fmtIva   = (v) => v != null ? fmtMoney(v) : '<span class="mirror-empty">—</span>';
+
+  // UUID más legible: 10 chars + … + 6 chars al final
+  const uuidShort = (uuid || '').length > 16 ? uuid.slice(0,10) + '…' + uuid.slice(-6) : (uuid || '—');
+
+  // Clase de fila
+  let rowClass = 'mirror-row-ok';
+  if (alertas.includes('total_mismatch'))                                    rowClass = 'mirror-row-yellow';
+  if (alertas.includes('solo_metadata') || alertas.includes('solo_cfdi'))   rowClass = 'mirror-row-red';
+
+  // ── Lado METADATA ──
+  const metaRfc      = metadata ? (_getCol(metadata, 'RfcEmisor', 'rfc_emisor', 'RFC Emisor') || '—') : '<span class="mirror-empty">—</span>';
+  const metaFecha    = metadata ? fmtDate(_getCol(metadata, 'Fecha', 'fecha', 'FechaEmision')) : '<span class="mirror-empty">—</span>';
+  const metaTotalRaw = metadata ? _getCol(metadata, 'Total', 'total', 'Monto') : null;
+  const metaIvaTrs   = metadata ? _getCol(metadata, ..._IVA_TRAS_KEYS)  : null;
+  const metaIvaAcr   = metadata ? _getCol(metadata, ..._IVA_ACRED_KEYS) : null;
+  const metaEstado   = metadata ? (_getCol(metadata, 'Estado_Calculo', 'estado', 'Estatus', 'EfectoComprobante') || '—') : null;
+  const metaEstCell  = metadata ? `<span class="mirror-estado">${metaEstado}</span>` : '<span class="mirror-empty">—</span>';
+
+  // ── Lado CFDI ──
+  const cfdiRfc      = cfdi ? (_getCol(cfdi, 'RfcEmisor', 'rfc_emisor', 'RFC Emisor') || '—') : '<span class="mirror-empty">—</span>';
+  const cfdiFecha    = cfdi ? fmtDate(_getCol(cfdi, 'Fecha', 'fecha')) : '<span class="mirror-empty">—</span>';
+  const cfdiTotal    = cfdi ? _getCol(cfdi, 'Total', 'total', 'Monto') : null;
+  const cfdiIvaTrs   = cfdi ? _getCol(cfdi, ..._IVA_TRAS_KEYS)  : null;
+  const cfdiIvaAcr   = cfdi ? _getCol(cfdi, ..._IVA_ACRED_KEYS) : null;
+  const cfdiEstado   = cfdi ? (_getCol(cfdi, 'Estado_Calculo', 'estado', 'Estatus') || '—') : null;
+  const cfdiEstCell  = cfdi ? `<span class="mirror-estado">${cfdiEstado}</span>` : '<span class="mirror-empty">—</span>';
+
+  // Total con diferencia destacada
+  const metaTotalCell = alertas.includes('total_mismatch') && metadata
+    ? `<span class="mirror-diff-val">${fmtMoney(metaTotalRaw)}</span>`
+    : (metadata ? fmtMoney(metaTotalRaw) : '<span class="mirror-empty">—</span>');
+  const cfdiTotalCell = alertas.includes('total_mismatch') && cfdi
+    ? `<span class="mirror-diff-val">${fmtMoney(cfdiTotal)}</span>`
+    : (cfdi ? fmtMoney(cfdiTotal) : '<span class="mirror-empty">—</span>');
+
+  // Columna de alertas
+  const alertIcons = [];
+  if (alertas.includes('solo_metadata'))  alertIcons.push('<span class="mirror-alert-icon red" title="UUID solo en Metadata, no en CFDI"><i class="fas fa-times-circle"></i></span>');
+  if (alertas.includes('solo_cfdi'))      alertIcons.push('<span class="mirror-alert-icon red" title="UUID solo en CFDI, no en Metadata"><i class="fas fa-times-circle"></i></span>');
+  if (alertas.includes('total_mismatch')) alertIcons.push('<span class="mirror-alert-icon yellow" title="Total no coincide"><i class="fas fa-exclamation-triangle"></i></span>');
+  const alertaCell = alertIcons.length ? alertIcons.join(' ') : '<span class="mirror-ok-icon"><i class="fas fa-check"></i></span>';
+
+  // Atributos de filtro (alerta + año + mes)
+  const rowYear    = metaFecha && metaFecha !== '—' ? metaFecha.slice(0, 4) : '';
+  const rowMonth   = metaFecha && metaFecha !== '—' ? metaFecha.slice(0, 7) : '';
+  const filterAttr = `data-alertas="${alertas.join(' ')}" data-year="${rowYear}" data-month="${rowMonth}"`;
+
+  return `
+    <tr class="mirror-row ${rowClass}" ${filterAttr}>
+      <td>${metaRfc}</td>
+      <td>${metaFecha}</td>
+      <td class="money">${metaTotalCell}</td>
+      <td class="money mirror-iva-col">${fmtIva(metaIvaTrs)}</td>
+      <td class="money mirror-iva-col">${fmtIva(metaIvaAcr)}</td>
+      <td>${metaEstCell}</td>
+      <td class="mirror-uuid-col" title="${uuid}"><code>${uuidShort}</code></td>
+      <td>${cfdiRfc}</td>
+      <td>${cfdiFecha}</td>
+      <td class="money">${cfdiTotalCell}</td>
+      <td class="money mirror-iva-col">${fmtIva(cfdiIvaTrs)}</td>
+      <td class="money mirror-iva-col">${fmtIva(cfdiIvaAcr)}</td>
+      <td>${cfdiEstCell}</td>
+      <td class="mirror-alerts-cell">${alertaCell}</td>
+    </tr>`;
+}
+
+// Aplica en paralelo filtro de alerta + filtro de año sobre la tabla espejo
+function _applyMirrorFilters() {
+  const filtro = ComparacionModule.filtroAlerta;
+  const año    = ComparacionModule.filtroAño;
+
+  // Filas de datos — filtrar por alerta Y por año
+  document.querySelectorAll('#mirror-table-body .mirror-row').forEach(row => {
+    const alertas = row.dataset.alertas || '';
+    const rowYear = row.dataset.year    || '';
+
+    let alertaOk;
+    if (filtro === 'todos')        alertaOk = true;
+    else if (filtro === 'ok')      alertaOk = alertas === 'ok';
+    else if (filtro === 'errores') alertaOk = alertas !== 'ok';
+    else                           alertaOk = alertas.includes(filtro);
+
+    const añoOk = !año || rowYear === año;
+    row.style.display = (alertaOk && añoOk) ? '' : 'none';
+  });
+
+  // Filas de período — solo filtro de año (siempre visibles si el año coincide)
+  document.querySelectorAll('#mirror-table-body .mirror-period-row').forEach(row => {
+    const rowYear = row.dataset.year || '';
+    row.style.display = (!año || rowYear === año) ? '' : 'none';
+  });
+}
+
+// Llamada por el <select> en <th>Fecha</th>
+function filterMirrorByYear(year) {
+  ComparacionModule.filtroAño = year;
+  _applyMirrorFilters();
+}
+
+function filterMirrorTable(filtro) {
+  ComparacionModule.filtroAlerta = filtro;
+
+  // Actualizar botones activos
+  document.querySelectorAll('.comp-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filtro);
+  });
+
+  _applyMirrorFilters();
 }

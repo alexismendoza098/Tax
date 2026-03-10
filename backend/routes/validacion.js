@@ -296,8 +296,10 @@ router.post('/iniciar', authMiddleware, async (req, res) => {
 router.get('/estado/:id', authMiddleware, async (req, res) => {
     try {
         const [rows] = await pool.query(
-            'SELECT * FROM validaciones_sat WHERE id = ?',
-            [req.params.id]
+            `SELECT v.* FROM validaciones_sat v
+             WHERE v.id = ?
+               AND v.rfc IN (SELECT rfc FROM contribuyentes WHERE usuario_id = ?)`,
+            [req.params.id, req.user.id]
         );
         if (!rows.length) return res.status(404).json({ error: 'Validación no encontrada' });
         res.json(rows[0]);
@@ -309,10 +311,17 @@ router.get('/estado/:id', authMiddleware, async (req, res) => {
 // ── GET /api/validacion/historial/:rfc ──────────────────────
 router.get('/historial/:rfc', authMiddleware, async (req, res) => {
     try {
+        const rfc = req.params.rfc.toUpperCase();
+        // Verificar que el RFC pertenezca al usuario
+        const [owns] = await pool.query(
+            'SELECT id FROM contribuyentes WHERE rfc = ? AND usuario_id = ?',
+            [rfc, req.user.id]
+        );
+        if (!owns.length) return res.status(403).json({ error: 'RFC no pertenece a tu cuenta' });
         const [rows] = await pool.query(
             `SELECT * FROM validaciones_sat WHERE rfc = ?
              ORDER BY fecha_validacion DESC LIMIT 50`,
-            [req.params.rfc]
+            [rfc]
         );
         res.json(rows);
     } catch (e) {
@@ -324,7 +333,10 @@ router.get('/historial/:rfc', authMiddleware, async (req, res) => {
 router.get('/historial', authMiddleware, async (req, res) => {
     try {
         const [rows] = await pool.query(
-            `SELECT * FROM validaciones_sat ORDER BY fecha_validacion DESC LIMIT 100`
+            `SELECT * FROM validaciones_sat
+             WHERE rfc IN (SELECT rfc FROM contribuyentes WHERE usuario_id = ?)
+             ORDER BY fecha_validacion DESC LIMIT 100`,
+            [req.user.id]
         );
         res.json(rows);
     } catch (e) {
@@ -335,6 +347,14 @@ router.get('/historial', authMiddleware, async (req, res) => {
 // ── GET /api/validacion/:id/incongruencias ───────────────────
 router.get('/:id/incongruencias', authMiddleware, async (req, res) => {
     try {
+        // Verificar que la validación pertenezca al usuario
+        const [owns] = await pool.query(
+            `SELECT 1 FROM validaciones_sat
+             WHERE id = ? AND rfc IN (SELECT rfc FROM contribuyentes WHERE usuario_id = ?)`,
+            [req.params.id, req.user.id]
+        );
+        if (!owns.length) return res.status(403).json({ error: 'Acceso denegado' });
+
         const { tipo, direccion, resuelta } = req.query;
         let   sql    = 'SELECT * FROM validacion_incongruencias WHERE validacion_id = ?';
         const params = [req.params.id];

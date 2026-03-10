@@ -118,36 +118,39 @@ class SatIntegration:
         for s, e in ranges:
             # Set end time to 23:59:59 to ensure valid range (start < end) and full day coverage
             e = e.replace(hour=23, minute=59, second=59, microsecond=999999)
+            s_adj = s  # se ajusta a s + 1s si el SAT devuelve código 5002
 
             # Retry loop for each range
             max_retries = 3
             success = False
-            
+
             for attempt in range(max_retries):
                 try:
                     # Re-instantiate service to be safe
                     service = ServiceClass(self.fiel)
-                    
+
                     r = service.solicitar_descarga(
-                        self.token, 
-                        self.rfc, 
-                        s, 
-                        e, 
-                        tipo_solicitud=tipo_solicitud, 
+                        self.token,
+                        self.rfc,
+                        s_adj,
+                        e,
+                        tipo_solicitud=tipo_solicitud,
                         **kwargs
                     )
-                    
+
                     # Token check from Descargas (1).py
                     if self._is_bad_token(r):
                         if attempt < max_retries - 1:
                             self.authenticate(force=True)
                             continue
-                    
+
+                    cod = str(r.get('cod_estatus') or r.get('codigo_estado_solicitud') or '')
+
                     # Check for valid ID
                     if r.get('id_solicitud'):
                         results.append({
                             "id_solicitud": r.get('id_solicitud'),
-                            "fecha_inicio": s.strftime('%Y-%m-%d'),
+                            "fecha_inicio": s_adj.strftime('%Y-%m-%d'),
                             "fecha_fin": e.strftime('%Y-%m-%d'),
                             "mensaje": r.get('mensaje'),
                             "estado_solicitud": r.get('estado_solicitud'),
@@ -155,14 +158,19 @@ class SatIntegration:
                         })
                         success = True
                         break # Success for this range
+                    elif cod == '5002' and s_adj == s and attempt < max_retries - 1:
+                        # SAT: límite de por vida — reintento con inicio +1 segundo
+                        s_adj = s + timedelta(seconds=1)
+                        time.sleep(1)
+                        continue
                     else:
                         # SAT Error or specific message
                         if attempt == max_retries - 1:
                             results.append({"error": r.get('mensaje'), "data": r})
-                
-                except Exception as e:
+
+                except Exception as exc:
                     if attempt == max_retries - 1:
-                        results.append({"error": str(e)})
+                        results.append({"error": str(exc)})
                     time.sleep(2)
             
             # Avoid SAT flooding

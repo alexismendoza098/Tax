@@ -14,6 +14,13 @@ router.get('/iva-trasladado', async (req, res) => {
       return res.status(400).json({ error: 'contribuyente_id es requerido' });
     }
 
+    // Verificar que el contribuyente pertenezca al usuario autenticado
+    const [owns] = await pool.query(
+      'SELECT id FROM contribuyentes WHERE id = ? AND usuario_id = ?',
+      [contribuyente_id, req.user.id]
+    );
+    if (!owns.length) return res.status(403).json({ error: 'Acceso denegado: contribuyente no pertenece a tu cuenta' });
+
     let where = ['c.contribuyente_id = ?', "c.tipo_de_comprobante IN ('I')"];
     let params = [contribuyente_id];
 
@@ -67,10 +74,13 @@ router.get('/iva-acreditable', async (req, res) => {
       return res.status(400).json({ error: 'contribuyente_id es requerido' });
     }
 
-    // Get the RFC for this contributor
-    const [contrib] = await pool.query('SELECT rfc FROM contribuyentes WHERE id = ?', [contribuyente_id]);
+    // Get the RFC for this contributor — verificando ownership al mismo tiempo
+    const [contrib] = await pool.query(
+      'SELECT rfc FROM contribuyentes WHERE id = ? AND usuario_id = ?',
+      [contribuyente_id, req.user.id]
+    );
     if (contrib.length === 0) {
-      return res.status(404).json({ error: 'Contribuyente no encontrado' });
+      return res.status(403).json({ error: 'Acceso denegado: contribuyente no pertenece a tu cuenta' });
     }
     const rfc = contrib[0].rfc;
 
@@ -146,9 +156,13 @@ router.get('/export-excel/:tipo', async (req, res) => {
       return res.status(400).json({ error: 'contribuyente_id es requerido' });
     }
 
-    // Get contributor info
-    const [contrib] = await pool.query('SELECT * FROM contribuyentes WHERE id = ?', [contribuyente_id]);
-    const rfc = contrib.length > 0 ? contrib[0].rfc : 'UNKNOWN';
+    // Get contributor info — verificando ownership al mismo tiempo
+    const [contrib] = await pool.query(
+      'SELECT * FROM contribuyentes WHERE id = ? AND usuario_id = ?',
+      [contribuyente_id, req.user.id]
+    );
+    if (!contrib.length) return res.status(403).json({ error: 'Acceso denegado: contribuyente no pertenece a tu cuenta' });
+    const rfc = contrib[0].rfc;
 
     let data;
     let sheetName;

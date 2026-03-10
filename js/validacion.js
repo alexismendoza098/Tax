@@ -49,7 +49,7 @@ async function valIniciar() {
         showToast('info', 'Validación', 'Validación iniciada, procesando...');
         valPolling(_valActualId);
     } catch (e) {
-        showToast('danger', 'Error', e.message);
+        showToast('error', 'Error', e.message);
         valSetEstado('idle');
         document.getElementById('val-btn-iniciar').disabled = false;
     }
@@ -72,7 +72,7 @@ function valPolling(id) {
                     valCargarIncongruencias(id);
                     showToast('success', 'Completado', '✅ Validación completada');
                 } else {
-                    showToast('danger', 'Error', 'Error en validación: ' + data.error_msg);
+                    showToast('error', 'Error', 'Error en validación: ' + data.error_msg);
                 }
             } else {
                 valSetEstado('procesando');
@@ -135,20 +135,20 @@ async function valCargarIncongruencias(id, filtroTipo = '', filtroDireccion = ''
 
         tbody.innerHTML = data.map(inc => {
             const tipoBadge = {
-                faltante:   '<span class="badge bg-danger">🔴 Faltante</span>',
-                monto:      '<span class="badge bg-warning text-dark">🟡 Monto</span>',
-                rfc:        '<span class="badge bg-warning text-dark">🟡 RFC</span>',
-                fecha:      '<span class="badge bg-warning text-dark">🟡 Fecha</span>',
-                cancelado:  '<span class="badge bg-info text-dark">🔵 Cancelado</span>'
+                faltante:   '<span class="sat-code sat-code-error" style="font-size:0.75rem">Faltante</span>',
+                monto:      '<span class="sat-code sat-code-pending" style="font-size:0.75rem">Monto</span>',
+                rfc:        '<span class="sat-code sat-code-pending" style="font-size:0.75rem">RFC</span>',
+                fecha:      '<span class="sat-code sat-code-pending" style="font-size:0.75rem">Fecha</span>',
+                cancelado:  '<span class="sat-code" style="font-size:0.75rem;background:rgba(96,165,250,0.1);color:#60a5fa;">Cancelado</span>'
             }[inc.tipo] || inc.tipo;
 
             const dirBadge = inc.direccion === 'emitido'
-                ? '<span class="badge bg-success"><i class="fas fa-arrow-circle-up"></i> Emitido</span>'
-                : '<span class="badge bg-primary"><i class="fas fa-arrow-circle-down"></i> Recibido</span>';
+                ? '<span class="sat-code sat-code-ok" style="font-size:0.75rem"><i class="fas fa-arrow-circle-up"></i> Emitido</span>'
+                : '<span class="sat-code" style="font-size:0.75rem;background:rgba(37,99,235,0.1);color:#60a5fa;"><i class="fas fa-arrow-circle-down"></i> Recibido</span>';
 
             const resuelta = inc.resuelta
-                ? '<span class="badge bg-secondary">Resuelta</span>'
-                : `<button class="btn btn-xs btn-outline-success" onclick="valResolver(${inc.id})">
+                ? '<span class="sat-code sat-code-pending" style="font-size:0.75rem">Resuelta</span>'
+                : `<button class="btn btn-sm" style="background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.3);" onclick="valResolver(${inc.id})">
                      <i class="fas fa-check"></i> Resolver
                    </button>`;
 
@@ -183,7 +183,7 @@ async function valResolver(incId) {
         showToast('success', 'Resuelto', 'Marcada como resuelta');
         if (_valActualId) valCargarIncongruencias(_valActualId);
     } catch (e) {
-        showToast('danger', 'Error', e.message);
+        showToast('error', 'Error', e.message);
     }
 }
 
@@ -207,13 +207,13 @@ async function valCargarHistorial() {
 
         tbody.innerHTML = data.map(v => {
             const statusBadge = {
-                completo:    '<span class="badge bg-success">✅ Completo</span>',
-                procesando:  '<span class="badge bg-info text-dark"><i class="fas fa-spinner fa-spin"></i> Procesando</span>',
-                error:       '<span class="badge bg-danger">❌ Error</span>'
+                completo:    '<span class="sat-code sat-code-ok" style="font-size:0.75rem">Completo</span>',
+                procesando:  '<span class="sat-code" style="font-size:0.75rem;background:rgba(96,165,250,0.1);color:#60a5fa;"><i class="fas fa-spinner fa-spin"></i> Procesando</span>',
+                error:       '<span class="sat-code sat-code-error" style="font-size:0.75rem">Error</span>'
             }[v.status] || v.status;
 
             const pct     = parseFloat(v.completitud_pct || 0);
-            const pctColor = pct >= 99 ? 'success' : pct >= 90 ? 'warning' : 'danger';
+            const pctColor = pct >= 99 ? 'var(--accent-green)' : pct >= 90 ? 'var(--accent-yellow)' : 'var(--accent-red)';
             const fecha   = new Date(v.fecha_validacion).toLocaleString('es-MX');
             const totalProb = (v.faltantes_emitidos||0) + (v.faltantes_recibidos||0) +
                               (v.cancelados_emitidos||0) + (v.cancelados_recibidos||0);
@@ -224,19 +224,19 @@ async function valCargarHistorial() {
                 <td>${esc(fecha)}</td>
                 <td>${statusBadge}</td>
                 <td>
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="progress flex-grow-1" style="height:8px;min-width:80px">
-                            <div class="progress-bar bg-${pctColor}" style="width:${pct}%"></div>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <div style="flex:1; background:var(--bg-tertiary); border-radius:9px; height:8px; min-width:80px; overflow:hidden;">
+                            <div style="width:${pct}%; height:100%; background:${pctColor}; border-radius:9px;"></div>
                         </div>
-                        <small class="text-${pctColor}">${pct.toFixed(1)}%</small>
+                        <small style="color:${pctColor}; font-weight:600;">${pct.toFixed(1)}%</small>
                     </div>
-                    ${totalProb > 0 ? `<small class="text-danger">${totalProb} problema${totalProb!==1?'s':''}</small>` : ''}
+                    ${totalProb > 0 ? `<small style="color:var(--accent-red);">${totalProb} problema${totalProb!==1?'s':''}</small>` : ''}
                 </td>
                 <td>
-                    <button class="btn btn-xs btn-outline-primary" onclick="event.stopPropagation();valVerDetalle(${v.id})">
+                    <button class="btn btn-sm btn-icon" onclick="event.stopPropagation();valVerDetalle(${v.id})" title="Ver detalle">
                         <i class="fas fa-eye"></i>
                     </button>
-                    <button class="btn btn-xs btn-outline-danger ms-1" onclick="event.stopPropagation();valEliminar(${v.id})">
+                    <button class="btn btn-sm btn-icon" style="color:var(--accent-red);" onclick="event.stopPropagation();valEliminar(${v.id})" title="Eliminar">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
@@ -257,7 +257,7 @@ async function valVerDetalle(id) {
         valCargarIncongruencias(id);
         document.getElementById('val-resultado-panel').scrollIntoView({ behavior: 'smooth' });
     } catch (e) {
-        showToast('danger', 'Error', 'Error al cargar detalle');
+        showToast('error', 'Error', 'Error al cargar detalle');
     }
 }
 
@@ -273,7 +273,7 @@ async function valEliminar(id) {
             _valActualId = null;
         }
     } catch (e) {
-        showToast('danger', 'Error', e.message);
+        showToast('error', 'Error', e.message);
     }
 }
 

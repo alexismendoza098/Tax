@@ -64,14 +64,15 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Sin origen (curl, Postman, same-origin, SSR) → siempre permitir
     if (!origin) return callback(null, true);
-    if (allowedOrigins.some(o => origin.startsWith(o))) {
+    const isNgrok = /^https?:\/\/[^/]+\.ngrok(?:-free)?\.(?:dev|app)$/i.test(origin);
+    if (allowedOrigins.some(o => origin.startsWith(o)) || isNgrok) {
       return callback(null, true);
     }
     console.warn(`[CORS] Bloqueado: ${origin}`);
     return callback(new Error(`CORS: origen no permitido — ${origin}`), false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning'],
   credentials: true,
   optionsSuccessStatus: 200,
 };
@@ -87,6 +88,11 @@ app.use(helmet({
   crossOriginResourcePolicy: false,   // Allow cross-origin resource sharing
   crossOriginOpenerPolicy: false,
 }));
+
+// Necesario para que express-rate-limit funcione correctamente detrás de
+// proxies inversos (ngrok, nginx, Apache ProxyPass). Sin esto, el header
+// X-Forwarded-For que envía ngrok causa ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+app.set('trust proxy', 1);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

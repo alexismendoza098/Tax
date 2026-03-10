@@ -832,3 +832,458 @@
   .lm-toolbar { flex-direction: column; align-items: stretch; }
   .lm-toolbar .form-input { width: 100% !important; max-width: 100% !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MÓDULO REPOSITORIO
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Stats row */
+.repo-stats-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.repo-stat {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 110px;
+  flex: 1;
+}
+.repo-stat span {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.repo-stat label {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.repo-stat-ok  span { color: #4ade80; }
+.repo-stat-warn span { color: #fbbf24; }
+
+/* Toolbar */
+.repo-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.repo-info-txt {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* Paquete card */
+.repo-pkg-list-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.repo-pkg-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+.repo-pkg-card:hover { background: rgba(255,255,255,0.04); }
+
+.repo-pkg-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: rgba(var(--accent-green-rgb, 0,255,157),0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: var(--accent-green);
+  flex-shrink: 0;
+}
+.repo-pkg-info { flex: 1; min-width: 0; }
+.repo-pkg-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repo-pkg-meta {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.repo-pkg-meta span { display: flex; align-items: center; gap: 0.3rem; }
+.repo-pkg-status { flex-shrink: 0; }
+.repo-pkg-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+/* Badges estado del paquete */
+.repo-badge {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.repo-badge-ok   { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
+.repo-badge-warn { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+
+/* ═══════════════════════════════════════════════════════════════
+   MÓDULO COMPARACIÓN — Vista Espejo
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Toolbar superior */
+.comp-toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Leyenda de colores */
+.comp-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+  font-size: 0.78rem;
+}
+.comp-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.comp-legend-item.comp-row-red    { background: rgba(248,113,113,0.12); color: #f87171; }
+.comp-legend-item.comp-row-yellow { background: rgba(251,191,36,0.12);  color: #fbbf24; }
+.comp-legend-item.comp-row-alert  { background: rgba(249,115,22,0.12);  color: #fb923c; }
+.comp-legend-item.comp-row-ok     { background: rgba(74,222,128,0.10);  color: #4ade80; }
+
+/* Chips de año en el banner de comparación */
+.comp-year-chip {
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #334155);
+  background: transparent;
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.comp-year-chip:hover {
+  border-color: var(--accent-blue, #38bdf8);
+  color: var(--accent-blue, #38bdf8);
+}
+.comp-year-chip.active {
+  background: var(--accent-blue, #38bdf8);
+  border-color: var(--accent-blue, #38bdf8);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Stats badges */
+.comp-stats-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.comp-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.comp-badge-ok     { background: rgba(74,222,128,0.12);  color: #4ade80; border: 1px solid rgba(74,222,128,0.2); }
+.comp-badge-red    { background: rgba(248,113,113,0.12); color: #f87171; border: 1px solid rgba(248,113,113,0.2); }
+.comp-badge-yellow { background: rgba(251,191,36,0.12);  color: #fbbf24; border: 1px solid rgba(251,191,36,0.2); }
+.comp-badge-alert  { background: rgba(249,115,22,0.12);  color: #fb923c; border: 1px solid rgba(249,115,22,0.2); }
+
+/* Barra de filtros */
+.comp-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+.comp-filter-label { font-size: 0.78rem; color: var(--text-secondary); margin-right: 0.25rem; }
+.comp-filter-btn {
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.comp-filter-btn:hover   { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+.comp-filter-btn.active  { background: rgba(99,102,241,0.2); color: #818cf8; border-color: rgba(99,102,241,0.4); }
+.comp-filter-red.active  { background: rgba(248,113,113,0.15); color: #f87171; border-color: rgba(248,113,113,0.3); }
+.comp-filter-yellow.active { background: rgba(251,191,36,0.15); color: #fbbf24; border-color: rgba(251,191,36,0.3); }
+.comp-filter-alert.active  { background: rgba(249,115,22,0.15); color: #fb923c; border-color: rgba(249,115,22,0.3); }
+
+/* Contenedor con scroll horizontal y vertical */
+.mirror-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 72vh;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+/* Tabla espejo */
+.mirror-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  min-width: 1100px;
+}
+
+/* Cabecera principal con colores por panel */
+.mirror-header-main th { padding: 0.55rem 0.75rem; font-size: 0.7rem; }
+.mirror-side-header {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+}
+.mirror-left-header  { background: rgba(99,102,241,0.15); color: #818cf8; border-right: 2px solid rgba(99,102,241,0.35); }
+.mirror-right-header { background: rgba(34,197,94,0.12);  color: #4ade80; }
+.mirror-uuid-col     { width: 148px; text-align: center; background: var(--bg-secondary); }
+
+/* Cabecera de columnas — sticky para scroll vertical */
+.mirror-table thead th {
+  position: sticky;
+  z-index: 2;
+}
+.mirror-header-main th { top: 0; }
+.mirror-header-sub th {
+  top: 32px;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 2px solid var(--border-color);
+}
+.mirror-header-sub th.mirror-uuid-col { border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color); }
+
+/* Filas de datos */
+.mirror-row td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
+  color: var(--text-primary);
+}
+.mirror-row:last-child td { border-bottom: none; }
+.mirror-row:hover td { background: rgba(255,255,255,0.025); }
+
+/* Columna UUID — separador visual */
+.mirror-row .mirror-uuid-col {
+  text-align: center;
+  background: var(--bg-secondary);
+  border-left:  1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+.mirror-row .mirror-uuid-col code {
+  font-family: 'Courier New', monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0;
+}
+
+/* Celda de alertas */
+.mirror-alerts-cell { text-align: center; white-space: nowrap; }
+
+/* ── Colores de fila por estado ─────────────────────────── */
+.mirror-row-red    td { background: rgba(248,113,113,0.07) !important; }
+.mirror-row-red:hover td { background: rgba(248,113,113,0.12) !important; }
+.mirror-row-red td .mirror-empty { color: #f87171; }
+
+.mirror-row-yellow td { background: rgba(251,191,36,0.06) !important; }
+.mirror-row-yellow:hover td { background: rgba(251,191,36,0.1) !important; }
+
+.mirror-row-alert  td { background: rgba(249,115,22,0.07) !important; }
+.mirror-row-alert:hover td { background: rgba(249,115,22,0.12) !important; }
+
+.mirror-row-ok td  { background: transparent; }
+
+/* Valor diferente resaltado */
+.mirror-diff-val {
+  font-weight: 700;
+  color: #fbbf24;
+  text-decoration: underline dotted;
+}
+
+/* Celda vacía (falta en un lado) */
+.mirror-empty { color: rgba(255,255,255,0.2); font-style: italic; }
+
+/* Estado SAT */
+.mirror-estado {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  font-weight: 600;
+}
+.mirror-estado.estado-cancelado { background: rgba(248,113,113,0.15); color: #f87171; }
+.mirror-estado.estado-vigente   { background: rgba(74,222,128,0.12);  color: #4ade80; }
+
+/* Iconos de alerta en columna final */
+.mirror-alert-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.mirror-alert-icon.red    { background: rgba(248,113,113,0.2); color: #f87171; }
+.mirror-alert-icon.yellow { background: rgba(251,191,36,0.2);  color: #fbbf24; }
+.mirror-alert-icon.orange { background: rgba(249,115,22,0.2);  color: #fb923c; font-family: monospace; }
+.mirror-ok-icon { color: #4ade80; font-size: 0.85rem; }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .comp-toolbar    { flex-direction: column; align-items: stretch; }
+  .comp-stats-row  { gap: 0.4rem; }
+  .comp-badge      { font-size: 0.72rem; }
+  .repo-stats-row  { gap: 0.6rem; }
+  .repo-pkg-actions { flex-direction: column; }
+}
+@media (max-width: 600px) {
+  .comp-legend     { flex-direction: column; gap: 0.4rem; }
+  .comp-filter-bar { flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+  .repo-pkg-card   { flex-direction: column; align-items: flex-start; }
+  .repo-pkg-actions { flex-direction: row; }
+}
+
+/* ── Tarjetas de estado de reportes (panel Comparación) ──────────── */
+.comp-reporte-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.04);
+  min-width: 220px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.comp-reporte-card small {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: block;
+}
+.comp-card-ok {
+  border-color: rgba(74,222,128,0.4);
+  background: rgba(74,222,128,0.06);
+  color: #4ade80;
+}
+.comp-card-ok small { color: rgba(74,222,128,0.7); }
+.comp-card-missing {
+  border-color: rgba(248,113,113,0.4);
+  background: rgba(248,113,113,0.06);
+  color: #f87171;
+}
+.comp-card-missing small { color: rgba(248,113,113,0.7); }
+.comp-card-title {
+  display: block;
+  font-weight: 600;
+}
+
+/* ─── Filtro de año en encabezado <th>Fecha</th> de la tabla espejo ─── */
+.mirror-th-fecha {
+  white-space: nowrap;
+}
+
+.mirror-year-select {
+  display: inline-block;
+  margin-left: 5px;
+  background: var(--bg-primary, #0f172a);
+  color: var(--text-secondary, #94a3b8);
+  border: 1px solid var(--border, #334155);
+  border-radius: 4px;
+  font-size: 0.68rem;
+  padding: 1px 3px;
+  cursor: pointer;
+  vertical-align: middle;
+  max-width: 70px;
+}
+.mirror-year-select:hover { border-color: var(--accent-blue, #38bdf8); }
+.mirror-year-select:focus { outline: none; border-color: var(--accent-blue, #38bdf8); }
+
+/* ─── Columnas IVA ─── */
+.mirror-iva-col { min-width: 92px; }
+
+/* ─── Filas de total de período ─── */
+.mirror-period-row td {
+  vertical-align: middle;
+  padding: 0.45rem 0.75rem;
+}
+.period-label {
+  font-style: italic;
+  white-space: nowrap;
+}
+.period-label i { margin-right: 5px; }
+
+/* Fila de total mensual */
+.mirror-month-row td {
+  background: rgba(99,102,241,0.09);
+  font-weight: 600;
+  font-size: 0.77rem;
+  border-top: 1px solid rgba(99,102,241,0.28);
+  border-bottom: 1px solid rgba(99,102,241,0.15);
+  color: var(--text-secondary);
+}
+.mirror-month-row .period-label { color: #818cf8; }
+
+/* Fila de total anual */
+.mirror-year-row td {
+  background: rgba(99,102,241,0.18);
+  font-weight: 700;
+  font-size: 0.8rem;
+  border-top: 2px solid rgba(99,102,241,0.45);
+  border-bottom: 2px solid rgba(99,102,241,0.45);
+  color: var(--text-primary);
+}
+.mirror-year-row .period-label { color: #a5b4fc; letter-spacing: 0.02em; }
+.period-total { color: #e2e8f0; }

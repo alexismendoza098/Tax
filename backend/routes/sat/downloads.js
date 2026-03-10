@@ -5,6 +5,30 @@ const fs = require('fs');
 const AdmZip = require('adm-zip');
 const pool = require('../../db');
 const { runSatScript, getPaths } = require('../../utils/satHelpers');
+const { authMiddleware } = require('../../middleware/auth');
+
+const DOWNLOADS_BASE = path.join(__dirname, '..', '..', 'downloads');
+
+// Busca un ZIP de paquete en toda la carpeta downloads (raíz + subdirectorios RFC)
+function findZipLocally(pkgId, baseDir) {
+    try {
+        for (const entry of fs.readdirSync(baseDir)) {
+            const entryPath = path.join(baseDir, entry);
+            // Directo en raíz
+            if (entry === `${pkgId}.zip`) {
+                try { if (fs.statSync(entryPath).size > 1024) return entryPath; } catch (_) { /* skip */ }
+            }
+            // En subdirectorio RFC
+            try {
+                if (fs.statSync(entryPath).isDirectory()) {
+                    const subPath = path.join(entryPath, `${pkgId}.zip`);
+                    if (fs.existsSync(subPath) && fs.statSync(subPath).size > 1024) return subPath;
+                }
+            } catch (_) { /* skip */ }
+        }
+    } catch (_) { /* skip */ }
+    return null;
+}
 
 // 4. Download
 router.post('/download', async (req, res) => {
@@ -101,7 +125,29 @@ router.post('/download', async (req, res) => {
                 successCount++;
             } catch (err) {
                 console.error(`[ERROR] Falló descarga de paquete ${pkgId}:`, err);
-                results.push({ id: pkgId, status: 'error', error: err.message || err });
+
+                // Manejo específico de cod_estatus 5008 — límite de descargas SAT agotado
+                const errMsg = err.message || String(err);
+                const is5008 = (err.data?.cod_estatus === '5008') ||
+                               errMsg.includes('5008') ||
+                               errMsg.includes('Maximo de descargas') ||
+                               errMsg.includes('Maximo');
+
+                if (is5008) {
+                    // Intentar recuperar el ZIP de cualquier ruta local antes de rendirse
+                    const found = findZipLocally(pkgId, DOWNLOADS_BASE);
+                    if (found) {
+                        console.log(`[RECOVERY] Paquete ${pkgId} recuperado localmente en: ${found}`);
+                        results.push({ id: pkgId, status: 'success', file: found, cached: true, recovered: true,
+                            message: 'Paquete recuperado del disco local (límite SAT agotado)' });
+                        successCount++;
+                    } else {
+                        results.push({ id: pkgId, status: 'error', cod_estatus: '5008',
+                            error: `El paquete agotó el límite de descargas del SAT (cod 5008) y no se encontró el archivo local. El ZIP se perdió.` });
+                    }
+                } else {
+                    results.push({ id: pkgId, status: 'error', error: errMsg });
+                }
             }
         }
 
@@ -131,9 +177,18 @@ router.post('/download', async (req, res) => {
         
         // Handle specific SAT errors gracefully
         if (error.data && error.data.cod_estatus === '5004') {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 error: "El paquete aún no está listo en el SAT (Intente más tarde)",
-                details: error.data 
+                details: error.data
+            });
+        }
+
+        if ((error.data?.cod_estatus === '5008') ||
+            (error.message || '').includes('5008') ||
+            (error.message || '').includes('Maximo de descargas')) {
+            return res.status(410).json({
+                error: 'Este paquete ha excedido el límite de descargas del SAT (cod 5008). Si tienes el ZIP, colócalo manualmente en downloads/{RFC}/{ID}.zip',
+                cod_estatus: '5008'
             });
         }
         
@@ -150,10 +205,10 @@ router.post('/download', async (req, res) => {
 });
 
 // Stream File to Browser
-router.get('/download-file/:packageId', (req, res) => {
+router.get('/download-file/:packageId', authMiddleware, async (req, res) => {
     const { packageId } = req.params;
-    const { rfc } = req.query; 
-    
+    const { rfc } = req.query;
+
     if (!/^[a-zA-Z0-9_\-\.]+$/.test(packageId) || packageId.includes('..')) {
         return res.status(400).send("ID de paquete inválido");
     }
@@ -161,6 +216,18 @@ router.get('/download-file/:packageId', (req, res) => {
     let safeId = packageId;
     if (safeId.toLowerCase().endsWith('.zip')) {
         safeId = safeId.slice(0, -4);
+    }
+
+    // Verificar que el paquete pertenezca al usuario autenticado
+    const [owns] = await pool.query(`
+        SELECT 1 FROM solicitudes_sat
+        WHERE JSON_SEARCH(paquetes, 'one', ?) IS NOT NULL
+          AND (usuario_id = ? OR (usuario_id IS NULL AND rfc IN (
+                SELECT rfc FROM contribuyentes WHERE usuario_id = ?)))
+        LIMIT 1
+    `, [safeId, req.user.id, req.user.id]);
+    if (!owns.length) {
+        return res.status(403).json({ error: 'Acceso denegado: este paquete no pertenece a tu cuenta' });
     }
 
     const baseDir = path.join(__dirname, '..', '..', 'downloads');
@@ -173,12 +240,12 @@ router.get('/download-file/:packageId', (req, res) => {
     }
 
     if (!fs.existsSync(filePath) && rfc) {
-         const legacyPath = path.join(baseDir, `${safeId}.zip`);
-         if (fs.existsSync(legacyPath)) filePath = legacyPath;
+        const legacyPath = path.join(baseDir, `${safeId}.zip`);
+        if (fs.existsSync(legacyPath)) filePath = legacyPath;
     }
 
     if (fs.existsSync(filePath)) {
-        res.download(filePath); 
+        res.download(filePath);
     } else {
         res.status(404).send("Archivo no encontrado en el servidor. Intente descargarlo nuevamente desde el panel.");
     }

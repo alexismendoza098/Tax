@@ -45,6 +45,7 @@ const API_URL_DIRECT = _isLocalhost ? 'http://localhost:3000/api' : API_URL;
 
 let currentStep = 1;
 
+const _NGROK_H = window.location.hostname.includes('ngrok') ? { 'ngrok-skip-browser-warning': 'true' } : {};
 
 // =====================================================
 // SPLASH SCREEN
@@ -132,8 +133,7 @@ async function checkBackendStatus() {
         try {
             const controller = new AbortController();
             const tid = setTimeout(() => controller.abort(), 3000);
-            // /health nunca devuelve 401 — sin ruido en consola
-            const res = await fetch(`${baseUrl}/health`, { signal: controller.signal });
+            const res = await fetch(`${baseUrl}/health`, { signal: controller.signal, headers: _NGROK_H });
             clearTimeout(tid);
 
             if (res.ok) {
@@ -280,7 +280,7 @@ async function verifyTokenAndInit(token, loginOverlay) {
             const controller = new AbortController();
             const tid = setTimeout(() => controller.abort(), 4000);
             const res = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` },
+                headers: { 'Authorization': `Bearer ${token}`, ..._NGROK_H },
                 signal: controller.signal
             });
             clearTimeout(tid);
@@ -353,7 +353,7 @@ async function attemptLogin(event) {
 
             const response = await fetch(loginUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ..._NGROK_H },
                 body: JSON.stringify({ username, password }),
                 signal: controller.signal
             });
@@ -453,7 +453,8 @@ async function apiFetch(endpoint, options = {}) {
 
     const headers = {
         ...options.headers,
-        'Authorization': token ? `Bearer ${token}` : ''
+        'Authorization': token ? `Bearer ${token}` : '',
+        ..._NGROK_H
     };
 
     if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
@@ -494,7 +495,7 @@ async function apiFetch(endpoint, options = {}) {
 // Helper for file upload (multipart/form-data) - same dual-URL strategy
 async function apiFetchForm(endpoint, formData) {
     const token = localStorage.getItem('token');
-    const headers = { 'Authorization': token ? `Bearer ${token}` : '' };
+    const headers = { 'Authorization': token ? `Bearer ${token}` : '', ..._NGROK_H };
 
     const urlsToTry = [`${API_URL}${endpoint}`, `${API_URL_DIRECT}${endpoint}`];
 
@@ -592,11 +593,11 @@ function showSection(mode) {
 
     // Secciones especiales (no se muestran en modo estándar)
     const ESPECIALES = [
-      'admin','auditoria-section','fiscal','estados-cuenta'
+      'admin','auditoria-section','fiscal','estados-cuenta','validacion-section','contribuyentes'
     ];
 
     const secMap = {
-      'admin':          () => {
+      'admin':           () => {
           // Solo administradores pueden acceder a la gestión de usuarios
           if (!currentUser || currentUser.role !== 'admin') {
               showToast('warning', 'Acceso restringido', 'Solo los administradores pueden ver esta sección.');
@@ -604,10 +605,11 @@ function showSection(mode) {
           }
           const s = document.getElementById('admin'); if(s) s.style.display='block'; loadUsers();
       },
-      'fiscal':         () => { const s = document.getElementById('fiscal'); if(s) s.style.display='block'; if(typeof loadFiscalDashboard==='function') loadFiscalDashboard(); },
-      'estados-cuenta': () => { const s = document.getElementById('estados-cuenta'); if(s) s.style.display='block'; if(typeof ecLoadDashboard==='function') ecLoadDashboard(); },
-      'auditoria':      () => { if(auditoriaSection){ auditoriaSection.style.display='block'; auditoriaSection.classList.add('active'); if(typeof initAuditoria==='function') initAuditoria(); } },
-      'validacion':     () => { const s = document.getElementById('validacion-section'); if(s) s.style.display='block'; if(typeof valInit==='function') valInit(); },
+      'fiscal':          () => { const s = document.getElementById('fiscal'); if(s) s.style.display='block'; if(typeof loadFiscalDashboard==='function') loadFiscalDashboard(); },
+      'estados-cuenta':  () => { const s = document.getElementById('estados-cuenta'); if(s) s.style.display='block'; if(typeof ecLoadDashboard==='function') ecLoadDashboard(); },
+      'auditoria':       () => { if(auditoriaSection){ auditoriaSection.style.display='block'; auditoriaSection.classList.add('active'); if(typeof initAuditoria==='function') initAuditoria(); } },
+      'validacion':      () => { const s = document.getElementById('validacion-section'); if(s) s.style.display='block'; if(typeof valInit==='function') valInit(); },
+      'contribuyentes':  () => { const s = document.getElementById('contribuyentes'); if(s) s.style.display='block'; loadContribuyentes(); },
     };
 
     if (secMap[mode]) {
@@ -1856,6 +1858,26 @@ function parsePackets(paquetes) {
 
 let selectedPackages = new Set();
 let availablePackages = [];
+let activeTypeFilter = null; // null | 'Metadata' | 'CFDI'
+
+// ─── Descarga un reporte XLSX con autenticación ───────────────────────────────
+async function downloadFlattenReport(filename) {
+    try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_URL}/flatten/download/${encodeURIComponent(filename)}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    } catch (e) {
+        alert('Error al descargar: ' + e.message);
+    }
+}
 
 // ─── Cargar reportes Reporte_Consolidado_*.xlsx históricos ───────────────────
 async function loadGeneratedReports() {
@@ -1907,10 +1929,10 @@ async function loadGeneratedReports() {
                     </div>
                 </div>
                 <div style="display:flex; gap:0.4rem; flex-shrink:0;">
-                    <a href="${API_URL}${r.downloadUrl.replace('/api','')}" target="_blank"
-                       class="btn btn-sm btn-outline" title="Descargar">
+                    <button class="btn btn-sm btn-outline" title="Descargar"
+                            onclick="downloadFlattenReport('${r.filename}')">
                         <i class="fas fa-download"></i>
-                    </a>
+                    </button>
                     <button class="btn btn-sm" title="Eliminar este reporte"
                             onclick="deleteOneReport('${r.filename}')"
                             style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35);
@@ -1964,10 +1986,11 @@ async function deleteSelectedReports() {
     }
 
     showToast(
+        fail === 0 ? 'success' : 'warning',
+        'Reportes',
         fail === 0
             ? `${ok} reporte(s) eliminado(s) correctamente`
-            : `${ok} eliminado(s), ${fail} fallaron`,
-        fail === 0 ? 'success' : 'warning'
+            : `${ok} eliminado(s), ${fail} fallaron`
     );
     loadGeneratedReports();
 }
@@ -1978,14 +2001,14 @@ async function _doDeleteReport(filename, showAlert = true) {
         const res = await apiFetch(`/flatten/reports/${encodeURIComponent(filename)}`, { method: 'DELETE' });
         const data = await res.json();
         if (res.ok) {
-            if (showAlert) showToast(`Reporte eliminado: ${data.deleted.join(', ')}`, 'success');
+            if (showAlert) showToast('success', 'Eliminado', `Reporte eliminado: ${data.deleted.join(', ')}`);
             return true;
         } else {
-            if (showAlert) showToast('Error: ' + data.error, 'error');
+            if (showAlert) showToast('error', 'Error', data.error);
             return false;
         }
     } catch (e) {
-        if (showAlert) showToast('Error de conexión', 'error');
+        if (showAlert) showToast('error', 'Error de conexión', 'No se pudo contactar al servidor');
         return false;
     }
 }
@@ -2008,57 +2031,155 @@ async function loadFlattenPackages() {
         
         availablePackages = await res.json();
         
-        // Update stats
+        // Actualizar stats
         totalEl.textContent = availablePackages.length;
         processedEl.textContent = availablePackages.filter(p => p.processed).length;
+        const metaCountEl = document.getElementById('pkg-meta-count');
+        const cfdiCountEl = document.getElementById('pkg-cfdi-count');
+        if (metaCountEl) metaCountEl.textContent = availablePackages.filter(p => p.type === 'Metadata').length;
+        if (cfdiCountEl) cfdiCountEl.textContent  = availablePackages.filter(p => p.type === 'CFDI').length;
 
         if (availablePackages.length === 0) {
             listContainer.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-box-open"></i>
-                    <p>No se encontraron paquetes ZIP en el servidor</p>
+                    <p>No se encontraron paquetes en el servidor</p>
                 </div>
             `;
             return;
         }
 
-        listContainer.innerHTML = '';
-        availablePackages.forEach(pkg => {
-            // Extract ID from filename (remove extension)
-            const pkgId = pkg.name.replace(/\.zip$/i, '');
-            const isSelected = selectedPackages.has(pkgId);
-            
-            const card = document.createElement('div');
-            card.className = `package-card ${isSelected ? 'selected' : ''}`;
-            card.onclick = (e) => toggleSelectPackage(pkgId, card);
-            
-            const iconClass = pkg.type === 'Metadata' ? 'fa-file-alt' : 'fa-file-invoice';
-            const statusBadge = pkg.processed 
-                ? '<span class="badge bg-success" style="font-size:0.7em">Procesado</span>' 
-                : '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>';
+        // Reset filtro activo al recargar
+        activeTypeFilter = null;
+        const statMetaEl = document.getElementById('stat-filter-meta');
+        const statCfdiEl = document.getElementById('stat-filter-cfdi');
+        if (statMetaEl) statMetaEl.classList.remove('stat-active');
+        if (statCfdiEl) statCfdiEl.classList.remove('stat-active');
 
-            card.innerHTML = `
-                <div class="pkg-icon">
-                    <i class="fas ${iconClass}"></i>
-                </div>
-                <div class="pkg-info">
-                    <div class="pkg-name">${pkg.name}</div>
-                    <div class="pkg-meta">
-                        ${pkg.size} • ${new Date(pkg.date).toLocaleDateString()}
-                    </div>
-                </div>
-                ${statusBadge}
-                <div class="pkg-check">
-                    <i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'}"></i>
-                </div>
-            `;
-            listContainer.appendChild(card);
-        });
+        listContainer.innerHTML = '';
+        _renderPackageGroups(availablePackages, listContainer);
 
     } catch (e) {
         console.error(e);
         listContainer.innerHTML = '<div class="empty-state text-danger"><i class="fas fa-exclamation-triangle"></i><p>Error de conexión</p></div>';
     }
+}
+
+// ─── Filtro por tipo clickeable desde las stats del Paso 3 ───────────────────
+function applyTypeFilter(type) {
+    // Toggle: si ya está activo, desactiva el filtro
+    activeTypeFilter = (activeTypeFilter === type) ? null : type;
+
+    // Actualizar visual de las badges
+    const statMeta = document.getElementById('stat-filter-meta');
+    const statCfdi = document.getElementById('stat-filter-cfdi');
+    if (statMeta) statMeta.classList.toggle('stat-active', activeTypeFilter === 'Metadata');
+    if (statCfdi) statCfdi.classList.toggle('stat-active', activeTypeFilter === 'CFDI');
+
+    const TYPE_KEYS = {
+        'Metadata': ['meta-emit', 'meta-recv'],
+        'CFDI':     ['cfdi-emit', 'cfdi-recv'],
+    };
+    const filterLower = activeTypeFilter ? activeTypeFilter.toLowerCase() : null;
+
+    document.querySelectorAll('.pkg-section').forEach(section => {
+        const body = section.querySelector('[id^="pkgsec-"]');
+        if (!body) return;
+        const key = body.id.replace('pkgsec-', '');
+
+        if (key === 'sin-clas') {
+            // sin-clas: filtrar cards individuales por data-type (preserva selecciones)
+            let visibles = 0;
+            body.querySelectorAll('.package-card').forEach(card => {
+                const matches = !filterLower || card.dataset.type === filterLower;
+                card.style.display = matches ? '' : 'none';
+                if (matches) visibles++;
+            });
+            section.style.display = visibles > 0 ? '' : 'none';
+        } else {
+            // Secciones tipadas: show/hide por clave de sección
+            if (!activeTypeFilter) {
+                section.style.display = '';
+            } else {
+                const allowed = TYPE_KEYS[activeTypeFilter] || [];
+                section.style.display = allowed.includes(key) ? '' : 'none';
+            }
+        }
+    });
+}
+
+// ─── Renderiza paquetes agrupados en 4 secciones colapsables ─────────────────
+function _renderPackageGroups(packages, container) {
+    const GRUPOS = [
+        { key: 'meta-emit', type: 'Metadata', dir: 'Emitido',       label: 'Metadata · Emitidos',  icon: 'fa-file-alt',        color: '#60a5fa' },
+        { key: 'meta-recv', type: 'Metadata', dir: 'Recibido',      label: 'Metadata · Recibidos', icon: 'fa-file-alt',        color: '#818cf8' },
+        { key: 'cfdi-emit', type: 'CFDI',     dir: 'Emitido',       label: 'CFDI · Emitidos',      icon: 'fa-file-invoice',    color: '#34d399' },
+        { key: 'cfdi-recv', type: 'CFDI',     dir: 'Recibido',      label: 'CFDI · Recibidos',     icon: 'fa-file-invoice',    color: '#fbbf24' },
+        { key: 'sin-clas',  type: null,        dir: 'Sin clasificar', label: 'Sin clasificar',       icon: 'fa-question-circle', color: '#9ca3af' },
+    ];
+
+    GRUPOS.forEach(grupo => {
+        const pkgs = packages.filter(p =>
+            grupo.type === null
+                ? p.direccion === 'Sin clasificar'
+                : p.type === grupo.type && p.direccion === grupo.dir
+        );
+        if (pkgs.length === 0) return;
+
+        const section = document.createElement('div');
+        section.className = 'pkg-section';
+        section.innerHTML = `
+            <div class="pkg-section-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                <i class="fas ${grupo.icon}" style="color:${grupo.color}"></i>
+                <span class="pkg-section-label">${grupo.label}</span>
+                <span class="pkg-badge-count">${pkgs.length}</span>
+                <label class="pkg-sel-group" onclick="event.stopPropagation()">
+                    <input type="checkbox" onchange="toggleSelectGroup('${grupo.key}', this.checked)"> Todos
+                </label>
+                <i class="fas fa-chevron-down pkg-chevron"></i>
+            </div>
+            <div class="pkg-section-body" id="pkgsec-${grupo.key}"></div>
+        `;
+        container.appendChild(section);
+
+        const body = document.getElementById(`pkgsec-${grupo.key}`);
+        pkgs.forEach(pkg => {
+            const pkgId = pkg.name.replace(/\.(zip|txt)$/i, '');
+            const isSelected = selectedPackages.has(pkgId);
+            const statusBadge = pkg.processed
+                ? '<span class="badge bg-success" style="font-size:0.7em">Procesado</span>'
+                : '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>';
+            const card = document.createElement('div');
+            card.className = `package-card ${isSelected ? 'selected' : ''}`;
+            card.dataset.pkgid = pkgId;
+            card.dataset.group = grupo.key;
+            card.dataset.type = (pkg.type || 'CFDI').toLowerCase(); // 'metadata' | 'cfdi'
+            card.onclick = () => toggleSelectPackage(pkgId, card);
+            card.innerHTML = `
+                <div class="pkg-icon"><i class="fas ${grupo.icon}" style="color:${grupo.color}"></i></div>
+                <div class="pkg-info">
+                    <div class="pkg-name">${pkg.name}</div>
+                    <div class="pkg-meta">${pkg.size} · ${new Date(pkg.date).toLocaleDateString()}</div>
+                </div>
+                ${statusBadge}
+                <div class="pkg-check"><i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'}"></i></div>
+            `;
+            body.appendChild(card);
+        });
+    });
+}
+
+// ─── Seleccionar/deseleccionar todos los paquetes de un grupo ─────────────────
+function toggleSelectGroup(groupKey, checked) {
+    document.querySelectorAll(`.package-card[data-group="${groupKey}"]`).forEach(card => {
+        const pkgId = card.dataset.pkgid;
+        if (checked) selectedPackages.add(pkgId);
+        else selectedPackages.delete(pkgId);
+        card.classList.toggle('selected', checked);
+        card.querySelector('.pkg-check i').className =
+            `fas ${checked ? 'fa-check-square' : 'fa-square'}`;
+    });
+    updateSelectionUI();
 }
 
 function toggleSelectPackage(pkgId, cardElement) {
@@ -2077,10 +2198,10 @@ function toggleSelectPackage(pkgId, cardElement) {
 function toggleSelectAllPkgs() {
     const check = document.getElementById('select-all-pkgs');
     const cards = document.querySelectorAll('.package-card');
-    
     if (check.checked) {
-        availablePackages.forEach(p => selectedPackages.add(p.name.replace(/\.zip$/i, '')));
         cards.forEach(c => {
+            const id = c.dataset.pkgid || c.dataset.pkgId;
+            if (id) selectedPackages.add(id);
             c.classList.add('selected');
             c.querySelector('.pkg-check i').className = 'fas fa-check-square';
         });
@@ -2157,7 +2278,20 @@ async function deleteSelectedPackages() {
 
 async function processSelectedPackages() {
     if (selectedPackages.size === 0) return;
-    
+
+    // ── Detectar mezcla de tipos (Metadata + CFDI) ──
+    const tiposSeleccionados = new Set(
+        Array.from(selectedPackages).map(id => {
+            const pkg = availablePackages.find(p =>
+                p.name.replace(/\.(zip|txt)$/i, '') === id);
+            return pkg?.type;
+        }).filter(Boolean)
+    );
+    if (tiposSeleccionados.size > 1) {
+        if (!confirm('⚠️ Tienes paquetes Metadata (TXT) y CFDI (ZIP) seleccionados juntos.\n' +
+                     'Se generará un reporte combinado con ambos tipos. ¿Continuar de todas formas?')) return;
+    }
+
     const btn = document.getElementById('btn-process-selected');
     const reportsList = document.getElementById('reports-list');
     const originalText = btn.innerHTML;
@@ -2199,20 +2333,26 @@ async function processSelectedPackages() {
         tempItem.remove();
 
         if (res.ok) {
-            // Add success card
-            const successCard = document.createElement('div');
-            successCard.className = 'report-card';
-            successCard.style.borderLeft = '4px solid var(--accent-green)';
-            successCard.innerHTML = `
-                <div>
-                    <div style="font-weight:600; margin-bottom:0.2rem">Reporte Generado</div>
-                    <div style="font-size:0.85rem; color:var(--text-secondary)">${data.filename}</div>
-                </div>
-                <a href="${data.downloadUrl}" target="_blank" class="btn btn-sm btn-outline">
-                    <i class="fas fa-download"></i> Descargar
-                </a>
-            `;
-            reportsList.insertBefore(successCard, reportsList.firstChild);
+            // Soportar respuesta con uno o varios archivos generados (uno por paquete)
+            const filesToShow = data.files?.length > 0
+                ? data.files
+                : data.filename ? [{ filename: data.filename, downloadUrl: data.downloadUrl }] : [];
+
+            filesToShow.forEach(f => {
+                const successCard = document.createElement('div');
+                successCard.className = 'report-card';
+                successCard.style.borderLeft = '4px solid var(--accent-green)';
+                successCard.innerHTML = `
+                    <div>
+                        <div style="font-weight:600; margin-bottom:0.2rem">Reporte Generado</div>
+                        <div style="font-size:0.85rem; color:var(--text-secondary)">${f.filename}</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline" onclick="downloadFlattenReport('${f.filename}')">
+                        <i class="fas fa-download"></i> Descargar
+                    </button>
+                `;
+                reportsList.insertBefore(successCard, reportsList.firstChild);
+            });
 
             // Refresh both lists
             loadFlattenPackages();
@@ -2384,15 +2524,16 @@ function renderCalculation(data) {
 // ADMIN: USER MANAGEMENT
 // =====================================================
 function updateAdminUI() {
-    const navAdmin        = document.getElementById('nav-admin');
-    const navFiscal       = document.getElementById('nav-fiscal');
-    const navEstadosCuenta= document.getElementById('nav-estados-cuenta');
-    const navAuditoria    = document.getElementById('nav-auditoria');
+    const navAdmin          = document.getElementById('nav-admin');
+    const navFiscal         = document.getElementById('nav-fiscal');
+    const navEstadosCuenta  = document.getElementById('nav-estados-cuenta');
+    const navAuditoria      = document.getElementById('nav-auditoria');
+    const navContribuyentes = document.getElementById('nav-contribuyentes');
     const isLoggedIn = currentUser && (currentUser.role === 'admin' || currentUser.role === 'user');
     const isAdmin    = currentUser && currentUser.role === 'admin';
 
     // Secciones disponibles para todos los usuarios autenticados
-    const commonNavs = [navAuditoria, navFiscal, navEstadosCuenta];
+    const commonNavs = [navAuditoria, navFiscal, navEstadosCuenta, navContribuyentes];
     commonNavs.forEach(n => { if(n) n.style.display = isLoggedIn ? 'block' : 'none'; });
 
     // Seccion Clientes/Usuarios: SOLO visible para administradores
@@ -2619,9 +2760,9 @@ async function saveUser(e) {
 
     const payload = { nombre, rfc, email, role };
     if (!id) {
-        if (!username) { showToast('El usuario es requerido', 'error'); return; }
+        if (!username) { showToast('error', 'Validación', 'El usuario es requerido'); return; }
         payload.username = username;
-        if (!password) { showToast('La contraseña es requerida para nuevos clientes', 'error'); return; }
+        if (!password) { showToast('error', 'Validación', 'La contraseña es requerida para nuevos clientes'); return; }
     }
     if (password) payload.password = password;
 
@@ -2635,13 +2776,13 @@ async function saveUser(e) {
         if (res.ok) {
             closeUserModal();
             loadUsers();
-            showToast(id ? 'Cliente actualizado correctamente' : 'Cliente creado exitosamente', 'success');
+            showToast('success', 'Listo', id ? 'Cliente actualizado correctamente' : 'Cliente creado exitosamente');
         } else {
-            showToast('Error: ' + data.error, 'error');
+            showToast('error', 'Error', data.error);
         }
     } catch (err) {
         console.error(err);
-        showToast('Error de conexión con el servidor', 'error');
+        showToast('error', 'Error de conexión', 'No se pudo contactar al servidor');
     }
 }
 
@@ -2680,14 +2821,14 @@ async function deleteUser(id) {
         const res = await apiFetch(`/users/${id}`, { method: 'DELETE' });
         if (res.ok) {
             loadUsers();
-            showToast('Cliente eliminado', 'success');
+            showToast('success', 'Eliminado', 'Cliente eliminado correctamente');
         } else {
             const data = await res.json();
-            showToast('Error: ' + data.error, 'error');
+            showToast('error', 'Error', data.error);
         }
     } catch (e) {
         console.error(e);
-        showToast('Error de conexión', 'error');
+        showToast('error', 'Error de conexión', 'No se pudo contactar al servidor');
     }
 }
 
@@ -2902,4 +3043,110 @@ function showNotification(msg, type = 'info') {
     el.innerHTML = `<i class="fas fa-${icons[type]}" style="color:${colors[type]};"></i> ${msg}`;
     document.body.appendChild(el);
     setTimeout(() => { if (el.parentNode) el.remove(); }, 4000);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// MIS RFCs (CONTRIBUYENTES) — gestión de RFCs del usuario
+// ═══════════════════════════════════════════════════════════════════
+
+async function loadContribuyentes() {
+    const tbody = document.getElementById('contrib-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;opacity:0.5;"><i class="fas fa-spinner fa-spin"></i> Cargando...</td></tr>';
+    try {
+        const res = await fetch('/api/contribuyentes', {
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        const data = await res.json();
+        if (res.status === 401) {
+            showToast('warning', 'Sesión expirada', 'Tu sesión expiró. Vuelve a iniciar sesión.');
+            setTimeout(function() { if (typeof logout === 'function') logout(); }, 1500);
+            return;
+        }
+        if (!res.ok) throw new Error(data.error || 'Error al cargar');
+        renderContribuyentes(Array.isArray(data) ? data : []);
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:#f87171;">' + e.message + '</td></tr>';
+    }
+}
+
+function renderContribuyentes(rows) {
+    const tbody = document.getElementById('contrib-tbody');
+    if (!tbody) return;
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;opacity:0.5;">No tienes RFCs registrados. Usa el bot\u00f3n + Agregar RFC.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map(function(r) {
+        return '<tr>' +
+            '<td style="font-family:monospace;font-weight:600;">' + r.rfc + '</td>' +
+            '<td>' + (r.nombre || '\u2014') + '</td>' +
+            '<td>' + (r.regimen_fiscal ? r.regimen_fiscal : '\u2014') + '</td>' +
+            '<td style="text-align:center;">' +
+                '<button onclick="deleteContribuyente(' + r.id + ',\'' + r.rfc + '\')" title="Eliminar" ' +
+                'style="background:none;border:none;color:#f87171;cursor:pointer;font-size:1rem;">' +
+                '<i class="fas fa-trash"></i></button>' +
+            '</td>' +
+        '</tr>';
+    }).join('');
+}
+
+function openContribModal() {
+    document.getElementById('contrib-rfc').value = '';
+    document.getElementById('contrib-nombre').value = '';
+    document.getElementById('contrib-regimen').value = '';
+    document.getElementById('contrib-modal').style.display = 'flex';
+    setTimeout(function() { document.getElementById('contrib-rfc').focus(); }, 50);
+}
+
+function closeContribModal() {
+    document.getElementById('contrib-modal').style.display = 'none';
+}
+
+async function saveContribuyente() {
+    const rfc    = document.getElementById('contrib-rfc').value.trim().toUpperCase();
+    const nombre = document.getElementById('contrib-nombre').value.trim();
+    const regimen= document.getElementById('contrib-regimen').value;
+    if (!rfc || !nombre) {
+        showToast('warning', 'Campos requeridos', 'RFC y Nombre son obligatorios.');
+        return;
+    }
+    if (rfc.length < 12 || rfc.length > 13) {
+        showToast('warning', 'RFC inv\u00e1lido', 'El RFC debe tener 12 o 13 caracteres.');
+        return;
+    }
+    try {
+        const res = await fetch('/api/contribuyentes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('token')
+            },
+            body: JSON.stringify({ rfc: rfc, nombre: nombre, regimen_fiscal: regimen || null })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al guardar');
+        closeContribModal();
+        showToast('success', 'RFC agregado', rfc + ' registrado correctamente.');
+        loadContribuyentes();
+    } catch (e) {
+        showToast('error', 'Error', e.message);
+    }
+}
+
+async function deleteContribuyente(id, rfc) {
+    if (!confirm('¿Eliminar el RFC ' + rfc + ' de tu cuenta? Esta acción no se puede deshacer.')) return;
+    try {
+        const res = await fetch('/api/contribuyentes/' + id, {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al eliminar');
+        showToast('success', 'RFC eliminado', rfc + ' eliminado de tu cuenta.');
+        loadContribuyentes();
+    } catch (e) {
+        showToast('error', 'Error', e.message);
+    }
 }

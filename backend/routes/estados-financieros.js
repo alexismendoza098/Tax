@@ -30,7 +30,7 @@ async function saldosCuentas(contribId, year, mes) {
            COALESCE(bc.saldo_final_debe,0)  AS saldo_debe,
            COALESCE(bc.saldo_final_haber,0) AS saldo_haber
     FROM catalogo_cuentas cc
-    LEFT JOIN balanza_comprobacion bc ON bc.cuenta_id = cc.id
+    LEFT JOIN balanza_verificacion bc ON bc.cuenta_id = cc.id
       AND bc.ejercicio = ? AND bc.periodo = ?
     WHERE cc.contribuyente_id = ? AND cc.activa = 1
     ORDER BY cc.numero_cuenta

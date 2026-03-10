@@ -547,7 +547,7 @@ async function executeCleanup() {
         btn.innerHTML    = '<i class="fas fa-check"></i> Completado';
         btn.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
 
-        if (typeof showToast === 'function') showToast('✅ Sistema limpiado correctamente', 'success');
+        if (typeof showToast === 'function') showToast('success', 'Sistema', 'Sistema limpiado correctamente');
 
         // Actualizar vista previa
         setTimeout(loadCleanupPreview, 600);
@@ -556,7 +556,7 @@ async function executeCleanup() {
         logEl.innerHTML += `<div class="cleanup-log-line cleanup-log-err">❌ Error: ${fiscalEsc(err.message)}</div>`;
         btn.disabled  = false;
         btn.innerHTML = '<i class="fas fa-redo"></i> Reintentar';
-        if (typeof showToast === 'function') showToast(`Error en limpieza: ${err.message}`, 'error');
+        if (typeof showToast === 'function') showToast('error', 'Error', `Error en limpieza: ${err.message}`);
     }
 }
 

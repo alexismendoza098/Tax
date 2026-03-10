@@ -5,6 +5,7 @@ const fs = require('fs');
 const pool = require('../../db');
 const { runSatScript, getPaths, getDateChunks } = require('../../utils/satHelpers');
 const { randomUUID } = require('crypto');
+const { authMiddleware } = require('../../middleware/auth');
 
 // In-memory job store for async processing (survives as long as Node is running)
 const jobs = new Map(); // jobId → { status, progress, total, message, error, data }
@@ -23,11 +24,22 @@ router.get('/job/:id', (req, res) => {
 // El frontend hace polling a GET /api/sat/job/:id
 // Esto evita el timeout del proxy Apache (502).
 // =====================================================
-router.post('/request', async (req, res) => {
+router.post('/request', authMiddleware, async (req, res) => {
     const { rfc, password, start, end, type, cfdi_type, status } = req.body;
     console.log(`[SAT] Nueva solicitud — RFC: ${rfc}, ${start} → ${end}, tipo: ${type}`);
 
     // --- Validaciones síncronas (rápidas) ---
+    // Aislamiento: validar que el RFC pertenezca a un contribuyente del usuario autenticado
+    const [contribRows] = await pool.query(
+        'SELECT id FROM contribuyentes WHERE rfc = ? AND usuario_id = ?',
+        [(rfc || '').toUpperCase(), req.user.id]
+    );
+    if (!contribRows.length) {
+        return res.status(403).json({
+            error: `RFC ${rfc} no pertenece a tu cuenta. Regístralo en Contribuyentes primero.`
+        });
+    }
+
     const paths = getPaths(rfc);
     if (!paths) {
         return res.status(400).json({
@@ -79,12 +91,13 @@ router.post('/request', async (req, res) => {
     processRequestInBackground({
         jobId, groupId, rfc, password, paths,
         start, end, type, cfdi_type, status,
-        dateChunks
+        dateChunks,
+        usuarioId: req.user.id  // ← propagado para guardar en solicitudes_sat
     });
 });
 
 // Background processing function
-async function processRequestInBackground({ jobId, groupId, rfc, password, paths, start, end, type, cfdi_type, status, dateChunks }) {
+async function processRequestInBackground({ jobId, groupId, rfc, password, paths, start, end, type, cfdi_type, status, dateChunks, usuarioId }) {
     const job = jobs.get(jobId);
     const allData = [];
     const chunkErrors = [];
@@ -126,13 +139,14 @@ async function processRequestInBackground({ jobId, groupId, rfc, password, paths
                     await pool.query(`
                         INSERT INTO solicitudes_sat
                         (id_solicitud, rfc, fecha_inicio, fecha_fin, tipo_solicitud, tipo_comprobante,
-                         estado_solicitud, codigo_estado_solicitud, mensaje, group_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         estado_solicitud, codigo_estado_solicitud, mensaje, group_id, usuario_id)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE
                           estado_solicitud = VALUES(estado_solicitud),
                           codigo_estado_solicitud = VALUES(codigo_estado_solicitud),
                           mensaje = VALUES(mensaje),
-                          group_id = VALUES(group_id)
+                          group_id = VALUES(group_id),
+                          usuario_id = COALESCE(solicitudes_sat.usuario_id, VALUES(usuario_id))
                     `, [
                         data.id_solicitud, rfc,
                         data.fecha_inicio || chunk.start,  // ← chunk en scope aquí
@@ -141,7 +155,8 @@ async function processRequestInBackground({ jobId, groupId, rfc, password, paths
                         data.estado_solicitud || 0,
                         data.codigo_estado_solicitud || '',
                         data.mensaje || '',
-                        groupId
+                        groupId,
+                        usuarioId || null  // ← aislamiento multi-tenant
                     ]);
                 } catch (dbErr) {
                     console.error(`[SAT Job ${jobId}] DB error:`, dbErr.message);
@@ -149,15 +164,23 @@ async function processRequestInBackground({ jobId, groupId, rfc, password, paths
             }
 
         } catch (chunkErr) {
-            console.error(`[SAT Job ${jobId}] Chunk error ${chunk.start}-${chunk.end}:`, JSON.stringify(chunkErr).substring(0, 500));
-            // El sat_wrapper puede devolver { status:'error', data:[{message,error,code}] } sin .message raíz
-            let msg = chunkErr.message
-                   || chunkErr.data?.[0]?.message
-                   || chunkErr.data?.[0]?.error
-                   || (chunkErr.data ? `SAT: ${JSON.stringify(chunkErr.data).substring(0, 150)}` : '')
-                   || 'Error desconocido';
-            if (chunkErr.error && !msg.includes(chunkErr.error)) msg += `: ${chunkErr.error}`;
-            chunkErrors.push(`[${chunk.start}→${chunk.end}]: ${msg}`);
+            const errCode = chunkErr.data?.[0]?.code;
+            if (errCode === '404') {
+                // SAT código 404 = sin CFDIs en este período (resultado vacío, no es un error real)
+                processedCount++;
+                console.log(`[SAT Job ${jobId}] Sin CFDIs en ${chunk.start}→${chunk.end} (período vacío)`);
+            } else {
+                // Error real del SAT o del sistema
+                console.error(`[SAT Job ${jobId}] Chunk error ${chunk.start}-${chunk.end}:`, JSON.stringify(chunkErr).substring(0, 500));
+                // El sat_wrapper puede devolver { status:'error', data:[{message,error,code}] } sin .message raíz
+                let msg = chunkErr.message
+                       || chunkErr.data?.[0]?.message
+                       || chunkErr.data?.[0]?.error
+                       || (chunkErr.data ? `SAT: ${JSON.stringify(chunkErr.data).substring(0, 150)}` : '')
+                       || 'Error desconocido';
+                if (chunkErr.error && !msg.includes(chunkErr.error)) msg += `: ${chunkErr.error}`;
+                chunkErrors.push(`[${chunk.start}→${chunk.end}]: ${msg}`);
+            }
         }
     }
 
@@ -231,24 +254,41 @@ router.post('/verify', async (req, res) => {
     }
 });
 
-router.delete('/history/:rfc', async (req, res) => {
+router.delete('/history/:rfc', authMiddleware, async (req, res) => {
     try {
         const { rfc } = req.params;
-        await pool.query('DELETE FROM solicitudes_sat WHERE rfc = ?', [rfc]);
+        // Validar que el RFC pertenezca al usuario antes de borrar
+        const [owns] = await pool.query(
+            'SELECT id FROM contribuyentes WHERE rfc = ? AND usuario_id = ?',
+            [rfc.toUpperCase(), req.user.id]
+        );
+        if (!owns.length) {
+            return res.status(403).json({ error: 'RFC no pertenece a tu cuenta' });
+        }
+        await pool.query(
+            'DELETE FROM solicitudes_sat WHERE rfc = ? AND (usuario_id = ? OR usuario_id IS NULL)',
+            [rfc, req.user.id]
+        );
         res.json({ message: 'Historial eliminado correctamente' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// GET /history — todos los RFCs (admin)
-router.get('/history', async (req, res) => {
+// GET /history — solicitudes del usuario autenticado (aislamiento multi-tenant)
+router.get('/history', authMiddleware, async (req, res) => {
     try {
+        // Filtrar por usuario_id (solicitudes guardadas con el nuevo campo)
+        // O por RFC que pertenezca al usuario (migración de datos históricos)
         const [rows] = await pool.query(`
-            SELECT * FROM solicitudes_sat
-            ORDER BY fecha_solicitud DESC
+            SELECT s.* FROM solicitudes_sat s
+            WHERE s.usuario_id = ?
+               OR (s.usuario_id IS NULL AND s.rfc IN (
+                     SELECT rfc FROM contribuyentes WHERE usuario_id = ?
+                   ))
+            ORDER BY s.fecha_solicitud DESC
             LIMIT 1000
-        `);
+        `, [req.user.id, req.user.id]);
         const history = rows.map(row => {
             let packets = [];
             try {
@@ -261,7 +301,7 @@ router.get('/history', async (req, res) => {
         res.json(history);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Error obteniendo historial global' });
+        res.status(500).json({ error: 'Error obteniendo historial' });
     }
 });
 
@@ -304,18 +344,22 @@ router.get('/history/:rfc', async (req, res) => {
 });
 
 // Delete Requests
-router.post('/delete', async (req, res) => {
+router.post('/delete', authMiddleware, async (req, res) => {
     try {
         const { ids, rfc, deleteFiles } = req.body;
-        
+
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ error: "No se proporcionaron IDs para eliminar" });
         }
 
+        // Aislamiento: solo borrar solicitudes que pertenezcan al usuario autenticado
         const placeholders = ids.map(() => '?').join(',');
-        const query = `DELETE FROM solicitudes_sat WHERE id_solicitud IN (${placeholders})`;
-        
-        const [result] = await pool.query(query, ids);
+        const query = `DELETE FROM solicitudes_sat
+                       WHERE id_solicitud IN (${placeholders})
+                         AND (usuario_id = ? OR (usuario_id IS NULL AND rfc IN (
+                               SELECT rfc FROM contribuyentes WHERE usuario_id = ?)))`;
+
+        const [result] = await pool.query(query, [...ids, req.user.id, req.user.id]);
         const affectedRows = result.affectedRows;
         let deletedFilesCount = 0;
 
@@ -353,22 +397,40 @@ router.post('/delete', async (req, res) => {
     }
 });
 
-router.delete('/clean-requests/:rfc', async (req, res) => {
+router.delete('/clean-requests/:rfc', authMiddleware, async (req, res) => {
     try {
-        const { rfc } = req.params;
-        const [result] = await pool.query(`DELETE FROM solicitudes_sat WHERE rfc = ?`, [rfc]);
+        const rfc = req.params.rfc.toUpperCase();
+        // Verificar que el RFC pertenezca al usuario antes de borrar
+        const [owns] = await pool.query(
+            'SELECT id FROM contribuyentes WHERE rfc = ? AND usuario_id = ?',
+            [rfc, req.user.id]
+        );
+        if (!owns.length) {
+            return res.status(403).json({ success: false, error: 'RFC no pertenece a tu cuenta' });
+        }
+        const [result] = await pool.query(
+            `DELETE FROM solicitudes_sat WHERE rfc = ? AND (usuario_id = ? OR usuario_id IS NULL)`,
+            [rfc, req.user.id]
+        );
         res.json({ success: true, message: `Se eliminaron ${result.affectedRows} solicitudes`, deletedCount: result.affectedRows });
     } catch (error) {
         res.status(500).json({ success: false, error: "Error limpiando solicitudes", details: error.message });
     }
 });
 
-router.delete('/clean-all', async (req, res) => {
+router.delete('/clean-all', authMiddleware, async (req, res) => {
     try {
-        const [result] = await pool.query(`DELETE FROM solicitudes_sat`);
-        res.json({ success: true, message: `Se eliminaron ${result.affectedRows} solicitudes del sistema`, deletedCount: result.affectedRows });
+        // Solo borrar solicitudes del usuario autenticado
+        const [result] = await pool.query(
+            `DELETE FROM solicitudes_sat
+             WHERE usuario_id = ?
+                OR (usuario_id IS NULL AND rfc IN (
+                      SELECT rfc FROM contribuyentes WHERE usuario_id = ?))`,
+            [req.user.id, req.user.id]
+        );
+        res.json({ success: true, message: `Se eliminaron ${result.affectedRows} solicitudes`, deletedCount: result.affectedRows });
     } catch (error) {
-        res.status(500).json({ success: false, error: "Error limpiando todas las solicitudes", details: error.message });
+        res.status(500).json({ success: false, error: "Error limpiando solicitudes", details: error.message });
     }
 });
 

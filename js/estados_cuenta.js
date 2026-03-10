@@ -450,7 +450,11 @@ function ecShowOffline() {
 
 /* ─── Toast helper (reutiliza showToast de main.js si existe) ─ */
 function ecToast(msg, type = 'info') {
-    if (typeof showToast === 'function') { showToast(msg, type); return; }
+    if (typeof showToast === 'function') {
+        const titles = { success: 'Listo', error: 'Error', warning: 'Aviso', info: 'Info' };
+        showToast(type, titles[type] || 'Info', msg);
+        return;
+    }
     console.log(`[EC Toast ${type}]`, msg);
 }
 

@@ -29,7 +29,7 @@ async function contLoadCatalogo() {
     contRenderCatalogo(data);
     document.getElementById('contCatCount').textContent = data.length;
   } catch (e) {
-    showToast('Error al cargar catálogo: ' + e.message, 'error');
+    showToast('error', 'Error', 'Error al cargar catálogo: ' + e.message);
   }
 }
 
@@ -53,12 +53,12 @@ function contRenderCatalogo(cuentas) {
 async function contInicializarCatalogo() {
   if (!confirm('Esto cargará el catálogo de cuentas SAT estándar. ¿Continuar?')) return;
   try {
-    showToast('Inicializando catálogo...', 'info');
+    showToast('info', 'Procesando', 'Inicializando catálogo...');
     const r = await apiFetch('/contabilidad/catalogo/inicializar', 'POST', { forzar: false });
-    showToast(`Catálogo inicializado: ${r.cuentas_creadas} cuentas`, 'success');
+    showToast('success', 'Catálogo inicializado', `${r.cuentas_creadas} cuentas cargadas`);
     await contLoadCatalogo();
   } catch (e) {
-    showToast(e.message, 'error');
+    showToast('error', 'Error', e.message);
   }
 }
 
@@ -70,9 +70,9 @@ async function contEliminarCuenta(id) {
   if (!confirm('¿Eliminar esta cuenta?')) return;
   try {
     await apiFetch(`/contabilidad/catalogo/${id}`, 'DELETE');
-    showToast('Cuenta eliminada', 'success');
+    showToast('success', 'Eliminado', 'Cuenta eliminada correctamente');
     await contLoadCatalogo();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 // ─── PÓLIZAS ──────────────────────────────────────────────────
@@ -83,7 +83,7 @@ async function contLoadPolizas() {
     contRenderPolizas(data);
     document.getElementById('contPolizasCount').textContent = data.length;
   } catch (e) {
-    showToast('Error al cargar pólizas: ' + e.message, 'error');
+    showToast('error', 'Error', 'Error al cargar pólizas: ' + e.message);
   }
 }
 
@@ -108,12 +108,12 @@ function contRenderPolizas(polizas) {
 
 async function contGenerarPolizasCFDI() {
   try {
-    showToast('Generando pólizas automáticas...', 'info');
+    showToast('info', 'Procesando', 'Generando pólizas automáticas...');
     const r = await apiFetch('/contabilidad/polizas/generar-cfdi', 'POST',
       { year: contYearSel, mes: contMesSel });
-    showToast(`${r.polizas_generadas} pólizas generadas (${r.emitidas} emitidas + ${r.recibidas} recibidas)`, 'success');
+    showToast('success', 'Pólizas generadas', `${r.polizas_generadas} pólizas (${r.emitidas} emitidas + ${r.recibidas} recibidas)`);
     await contLoadPolizas();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function contVerPoliza(id) {
@@ -136,16 +136,16 @@ async function contVerPoliza(id) {
         </table>
       </div>`;
     showModal('Detalle de Póliza', html);
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function contEliminarPoliza(id) {
   if (!confirm('¿Eliminar esta póliza y sus movimientos?')) return;
   try {
     await apiFetch(`/contabilidad/polizas/${id}`, 'DELETE');
-    showToast('Póliza eliminada', 'success');
+    showToast('success', 'Eliminado', 'Póliza eliminada correctamente');
     await contLoadPolizas();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 // ─── BALANZA DE COMPROBACIÓN ──────────────────────────────────
@@ -155,7 +155,7 @@ async function contLoadBalanza() {
     contBalanza = data;
     contRenderBalanza(data);
   } catch (e) {
-    showToast('Error al cargar balanza: ' + e.message, 'error');
+    showToast('error', 'Error', 'Error al cargar balanza: ' + e.message);
   }
 }
 
@@ -177,12 +177,12 @@ function contRenderBalanza(filas) {
 
 async function contCalcularBalanza() {
   try {
-    showToast('Calculando balanza de comprobación...', 'info');
+    showToast('info', 'Procesando', 'Calculando balanza de comprobación...');
     const r = await apiFetch('/contabilidad/balanza/calcular', 'POST',
       { year: contYearSel, mes: contMesSel });
-    showToast(`Balanza calculada: ${r.cuentas_en_balanza} cuentas`, 'success');
+    showToast('success', 'Balanza calculada', `${r.cuentas_en_balanza} cuentas`);
     await contLoadBalanza();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) { showToast('error', 'Error', e.message); }
 }
 
 async function contExportarBalanzaXML() {
