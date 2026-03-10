@@ -1,0 +1,75 @@
+name: CI — ETaxes+
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Instalar dependencias y verificar arranque
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpass
+          MYSQL_DATABASE: ETaxes2_0
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: npm ci
+
+      - name: Crear .env de prueba
+        working-directory: backend
+        run: |
+          cat > .env << 'EOF'
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_USER=root
+          DB_PASSWORD=testpass
+          DB_NAME=ETaxes2_0
+          JWT_SECRET=ci-test-secret-muy-largo-32-chars-minimum
+          PORT=3000
+          NODE_ENV=test
+          FRONTEND_URL=http://localhost
+          EOF
+
+      - name: Ejecutar migraciones
+        working-directory: backend
+        run: node scripts/migrate.js || true
+
+      - name: Verificar que el servidor arranca
+        working-directory: backend
+        run: |
+          node server.js &
+          SERVER_PID=$!
+          sleep 4
+          curl -f http://localhost:3000/api/auth/login \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"email":"test@test.com","password":"test"}' \
+            --silent --output /dev/null \
+            --write-out "HTTP %{http_code}\n" | grep -E "HTTP (200|400|401)"
+          kill $SERVER_PID 2>/dev/null || true
+          echo "Servidor arrancó correctamente."

@@ -1059,7 +1059,7 @@ async function pollJobStatus(jobId, output, progFill, progPct, totalChunks) {
                 const job = await res.json();
 
                 // Update progress bar
-                const pct = totalChunks > 0 ? Math.round((job.progress / totalChunks) * 90) + 5 : 50;
+                const pct = totalChunks > 0 ? Math.round(((job.progress || 0) / totalChunks) * 90) + 5 : 50;
                 if (progFill) progFill.style.width = `${pct}%`;
                 if (progPct) progPct.innerText = `${pct}%`;
 
@@ -1221,7 +1221,7 @@ async function pollFullJob(jobId, cardId, label, totalChunks, output) {
                 if (!res.ok) { setTimeout(tick, interval); return; }
                 const job = await res.json();
 
-                const pct = totalChunks > 0 ? Math.round((job.progress / totalChunks) * 90) + 5 : 50;
+                const pct = totalChunks > 0 ? Math.round(((job.progress || 0) / totalChunks) * 90) + 5 : 50;
                 if (fillEl) fillEl.style.width = `${Math.min(pct, 99)}%`;
 
                 if (job.status === 'done') {
@@ -1467,13 +1467,14 @@ function renderRow(req, tbody, isChild = false) {
     let statusIcon = '○';
     const status = parseInt(req.estado_solicitud);
 
-    if (status === 1) { statusClass = 'bg-warning text-dark'; statusText = 'Aceptada';   statusIcon = '✔'; }
-    else if (status === 2) { statusClass = 'bg-info text-dark'; statusText = 'En Proceso'; statusIcon = '⏳'; }
-    else if (status === 3) { statusClass = 'bg-success';         statusText = 'Terminada'; statusIcon = '✅'; }
-    else if (status === 4) { statusClass = 'bg-danger';          statusText = 'Error';     statusIcon = '❌'; }
-    else if (status === 5) { statusClass = 'bg-danger';          statusText = 'Rechazada'; statusIcon = '🚫'; }
-    else if (status === 6) { statusClass = 'bg-secondary';       statusText = 'Vencida';   statusIcon = '⏰'; }
-    else { statusText = `Estado ${status}`; }
+    if (status === 0)      { statusClass = 'bg-light text-dark border'; statusText = 'Pendiente';  statusIcon = '○';  }
+    else if (status === 1) { statusClass = 'bg-warning text-dark';      statusText = 'Aceptada';   statusIcon = '✔';  }
+    else if (status === 2) { statusClass = 'bg-info text-dark';         statusText = 'En Proceso'; statusIcon = '⏳'; }
+    else if (status === 3) { statusClass = 'bg-success';                statusText = 'Terminada';  statusIcon = '✅'; }
+    else if (status === 4) { statusClass = 'bg-danger';                 statusText = 'Error';      statusIcon = '❌'; }
+    else if (status === 5) { statusClass = 'bg-danger';                 statusText = 'Rechazada';  statusIcon = '🚫'; }
+    else if (status === 6) { statusClass = 'bg-secondary';              statusText = 'Vencida';    statusIcon = '⏰'; }
+    // null/NaN → defaults 'bg-secondary' / 'Desconocido' / '○'
 
     // SAT response code pill (5000, 5002, etc.)
     const satCodePill = buildSatCodePill(req.codigo_estado_solicitud);
