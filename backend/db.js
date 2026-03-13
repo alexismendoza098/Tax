@@ -6,7 +6,7 @@ const pool = mysql.createPool({
   port:    process.env.DB_PORT     || 3307,
   user:    process.env.DB_USER     || 'root',
   password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME   || 'IVATAXRECOVERY',
+  database: process.env.DB_NAME   || 'ETaxes2_0',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
