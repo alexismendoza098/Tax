@@ -4,7 +4,7 @@ const mysql = require('mysql2/promise');
 let dbConfig;
 
 // Intenta usar la URL de MySQL de Railway primero
-const dbUrl = process.env['URL de MySQL'] || process.env.DATABASE_URL;
+const dbUrl = process.env['HOST_DE_BASE_DE_DATOS'] || process.env['URL de MySQL'] || process.env.DATABASE_URL;
 
 if (dbUrl) {
   try {
