@@ -1,1 +1,1 @@
-web: node start-prod.js
+web: bash start.sh
