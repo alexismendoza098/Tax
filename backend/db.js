@@ -1,23 +1,27 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
-const url = require('url');
 
 // Intenta usar la URL de MySQL de Railway primero
 const dbUrl = process.env['URL de MySQL'] || process.env.DATABASE_URL;
 let dbConfig;
 
-if (dbUrl) {
+if (dbUrl && dbUrl.startsWith('mysql://')) {
   try {
-    const parsed = new url.URL(dbUrl);
-    dbConfig = {
-      host: parsed.hostname,
-      port: parseInt(parsed.port || 3306),
-      user: parsed.username,
-      password: parsed.password,
-      database: parsed.pathname.substring(1), // quita el '/'
-    };
+    // Parsear URL de MySQL: mysql://usuario:pass@host:puerto/database
+    const match = dbUrl.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
+    if (match) {
+      dbConfig = {
+        host: match[3],
+        port: parseInt(match[4]),
+        user: match[1],
+        password: match[2],
+        database: match[5],
+      };
+    } else {
+      throw new Error('Invalid MySQL URL format');
+    }
   } catch (e) {
-    console.error('[DB] Error parsing database URL, using fallback');
+    console.error('[DB] Error parsing database URL, using fallback:', e.message);
     dbConfig = {
       host: process.env.DB_HOST || process.env['Host MySQL'] || 'localhost',
       port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || 3307),
