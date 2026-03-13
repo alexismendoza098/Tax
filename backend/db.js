@@ -1,27 +1,37 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
-// Intenta usar la URL de MySQL de Railway primero
-const dbUrl = process.env['URL de MySQL'] || process.env.DATABASE_URL;
 let dbConfig;
 
-if (dbUrl && dbUrl.startsWith('mysql://')) {
+// Intenta usar la URL de MySQL de Railway primero
+const dbUrl = process.env['URL de MySQL'] || process.env.DATABASE_URL;
+
+if (dbUrl) {
   try {
-    // Parsear URL de MySQL: mysql://usuario:pass@host:puerto/database
-    const match = dbUrl.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
-    if (match) {
-      dbConfig = {
-        host: match[3],
-        port: parseInt(match[4]),
-        user: match[1],
-        password: match[2],
-        database: match[5],
-      };
-    } else {
-      throw new Error('Invalid MySQL URL format');
-    }
+    // Parsear URL: mysql://usuario:contraseña@host:puerto/database
+    // Quitar el protocolo mysql://
+    const urlWithoutProtocol = dbUrl.replace('mysql://', '');
+
+    // Separar credenciales del host
+    const [credentials, hostAndDb] = urlWithoutProtocol.split('@');
+    const [user, password] = credentials.split(':');
+
+    // Separar host, puerto y base de datos
+    const [hostAndPort, database] = hostAndDb.split('/');
+    const [host, port] = hostAndPort.split(':');
+
+    dbConfig = {
+      host: host,
+      port: parseInt(port) || 3306,
+      user: user,
+      password: password,
+      database: database || 'ETaxes2_0',
+    };
+
+    console.log('[DB] ✅ URL de MySQL parseada correctamente');
   } catch (e) {
-    console.error('[DB] Error parsing database URL, using fallback:', e.message);
+    console.error('[DB] Error parsing database URL:', e.message);
+    console.error('[DB] Usando configuración por fallback');
     dbConfig = {
       host: process.env.DB_HOST || process.env['Host MySQL'] || 'localhost',
       port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || 3307),
@@ -31,6 +41,7 @@ if (dbUrl && dbUrl.startsWith('mysql://')) {
     };
   }
 } else {
+  console.log('[DB] No URL encontrada, usando variables de entorno individuales');
   dbConfig = {
     host: process.env.DB_HOST || process.env['Host MySQL'] || 'localhost',
     port: parseInt(process.env.DB_PORT || process.env.MYSQLPORT || 3307),
