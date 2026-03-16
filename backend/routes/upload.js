@@ -10,10 +10,13 @@ const { parseXML } = require('../utils/xmlParser');
 const router = express.Router();
 router.use(authMiddleware);
 
+const UPLOADS_ROOT = process.env.UPLOAD_DIR
+  || path.join(__dirname, '..', 'uploads');
+
 // Configure multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const dir = path.join(__dirname, '..', '..', 'uploads');
+    const dir = path.join(UPLOADS_ROOT, 'temp');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },

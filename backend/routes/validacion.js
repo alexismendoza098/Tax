@@ -11,7 +11,8 @@ const xml2js    = require('xml2js');
 const pool      = require('../db');
 const { authMiddleware } = require('../middleware/auth');
 
-const DOWNLOADS_DIR = path.join(__dirname, '..', 'downloads');
+const DOWNLOADS_DIR = process.env.DOWNLOAD_DIR
+  || path.join(__dirname, '..', 'downloads');
 const CHUNK_SIZE    = 500; // líneas de metadata por chunk
 
 // ── Utilidades ────────────────────────────────────────────────

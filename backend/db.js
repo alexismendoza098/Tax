@@ -1,12 +1,65 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 
+const parseDbUrl = (rawUrl) => {
+  try {
+    const url = new URL(rawUrl);
+    const dbName = (url.pathname || '').replace(/^\//, '');
+    return {
+      host: url.hostname,
+      port: url.port ? Number(url.port) : undefined,
+      user: decodeURIComponent(url.username || ''),
+      password: decodeURIComponent(url.password || ''),
+      database: dbName || undefined,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const resolveDbConfig = () => {
+  const urlConfig =
+    parseDbUrl(process.env.MYSQL_URL) ||
+    parseDbUrl(process.env.DATABASE_URL);
+
+  const port =
+    process.env.MYSQLPORT ||
+    process.env.MYSQL_PORT ||
+    undefined;
+
+  const base = urlConfig
+    ? {
+        host: urlConfig.host,
+        port: urlConfig.port,
+        user: urlConfig.user,
+        password: urlConfig.password,
+        database: urlConfig.database,
+      }
+    : {
+        host: process.env.MYSQLHOST || process.env.MYSQL_HOST,
+        port: port ? Number(port) : undefined,
+        user: process.env.MYSQLUSER || process.env.MYSQL_USER,
+        password: process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD,
+        database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE,
+      };
+
+  return {
+    host: process.env.DB_HOST || base.host || 'localhost',
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : (base.port || 3307),
+    user: process.env.DB_USER || base.user || 'root',
+    password: process.env.DB_PASSWORD || base.password || '',
+    database: process.env.DB_NAME || base.database || 'IVATAXRECOVERY',
+  };
+};
+
+const dbConfig = resolveDbConfig();
+
 const pool = mysql.createPool({
-  host:    process.env.DB_HOST     || 'localhost',
-  port:    process.env.DB_PORT     || 3307,
-  user:    process.env.DB_USER     || 'root',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME   || 'IVATAXRECOVERY',
+  host: dbConfig.host,
+  port: dbConfig.port,
+  user: dbConfig.user,
+  password: dbConfig.password,
+  database: dbConfig.database,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

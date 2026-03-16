@@ -130,9 +130,11 @@ function longRowsToCsvLines(longRows, isFirst) {
     return isFirst ? `Or,Var,Val,UUID\n${body}` : `\n${body}`;
 }
 
-// Temporary directory for extraction
-const TEMP_DIR = path.join(__dirname, '..', 'uploads', 'temp_flatten');
-const DOWNLOADS_DIR = path.join(__dirname, '..', 'downloads');
+const UPLOADS_ROOT = process.env.UPLOAD_DIR
+  || path.join(__dirname, '..', 'uploads');
+const DOWNLOADS_DIR = process.env.DOWNLOAD_DIR
+  || path.join(__dirname, '..', 'downloads');
+const TEMP_DIR = path.join(UPLOADS_ROOT, 'temp_flatten');
 
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 

@@ -364,7 +364,8 @@ router.post('/delete', authMiddleware, async (req, res) => {
         let deletedFilesCount = 0;
 
         if (deleteFiles) {
-            const baseDir = path.join(__dirname, '..', '..', 'downloads');
+            const baseDir = process.env.DOWNLOAD_DIR
+                || path.join(__dirname, '..', '..', 'downloads');
             const rfcDir = rfc ? path.join(baseDir, rfc) : null;
 
             ids.forEach(id => {

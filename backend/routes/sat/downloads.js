@@ -7,7 +7,10 @@ const pool = require('../../db');
 const { runSatScript, getPaths } = require('../../utils/satHelpers');
 const { authMiddleware } = require('../../middleware/auth');
 
-const DOWNLOADS_BASE = path.join(__dirname, '..', '..', 'downloads');
+const DOWNLOADS_BASE = process.env.DOWNLOAD_DIR
+  || path.join(__dirname, '..', '..', 'downloads');
+const UPLOADS_ROOT = process.env.UPLOAD_DIR
+  || path.join(__dirname, '..', '..', 'uploads');
 
 // Busca un ZIP de paquete en toda la carpeta downloads (raíz + subdirectorios RFC)
 function findZipLocally(pkgId, baseDir) {
@@ -230,7 +233,7 @@ router.get('/download-file/:packageId', authMiddleware, async (req, res) => {
         return res.status(403).json({ error: 'Acceso denegado: este paquete no pertenece a tu cuenta' });
     }
 
-    const baseDir = path.join(__dirname, '..', '..', 'downloads');
+    const baseDir = DOWNLOADS_BASE;
     let filePath;
 
     if (rfc && /^[a-zA-Z0-9]+$/.test(rfc)) {
@@ -261,7 +264,7 @@ router.post('/consolidate', async (req, res) => {
         }
         
         const zip = new AdmZip();
-        const baseDir = path.join(__dirname, '..', '..', 'downloads');
+        const baseDir = DOWNLOADS_BASE;
         const rfcDir = rfc ? path.join(baseDir, rfc) : null;
         
         let metadataContent = "";
@@ -322,7 +325,7 @@ router.post('/consolidate', async (req, res) => {
         }
 
         const downloadName = `Consolidado_${rfc || 'SAT'}_${new Date().getTime()}.zip`;
-        const tempPath = path.join(__dirname, '..', '..', 'uploads', 'temp', downloadName);
+        const tempPath = path.join(UPLOADS_ROOT, 'temp', downloadName);
         
         const tempDir = path.dirname(tempPath);
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });

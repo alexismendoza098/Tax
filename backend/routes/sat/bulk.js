@@ -146,7 +146,7 @@ async function processBulkYear(jobId, job, rfc, password, paths) {
       '--end',   end,
       '--type',  job.type,
       '--cfdi_type', cfdiTypeNorm,
-      '--status', job.status || 'Todos',
+      '--status', status || 'Todos',
     ];
 
     try {
@@ -343,7 +343,9 @@ async function processBulkYear(jobId, job, rfc, password, paths) {
       }
 
       // Write consolidated ZIP
-      const outDir     = path.join(__dirname, '..', '..', 'downloads', rfc.toUpperCase());
+      const baseDownloads = process.env.DOWNLOAD_DIR
+        || path.join(__dirname, '..', '..', 'downloads');
+      const outDir     = path.join(baseDownloads, rfc.toUpperCase());
       if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
       const zipName    = `ANUAL_${rfc.toUpperCase()}_${job.yearFrom}${job.yearTo !== job.yearFrom ? `-${job.yearTo}` : ''}_${Date.now()}.zip`;
@@ -389,7 +391,8 @@ router.get('/bulk-download/:filename', (req, res) => {
   }
 
   const rfcSafe = (rfc || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  const baseDir = path.join(__dirname, '..', '..', 'downloads');
+  const baseDir = process.env.DOWNLOAD_DIR
+    || path.join(__dirname, '..', '..', 'downloads');
   const filePath = rfcSafe
     ? path.join(baseDir, rfcSafe, filename)
     : path.join(baseDir, filename);

@@ -5,6 +5,27 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
+const firstNonEmpty = (keys) => {
+  for (const k of keys) {
+    const v = process.env[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+  }
+  return undefined;
+};
+
+const ensureEnv = (key, candidates) => {
+  if (process.env[key] !== undefined && process.env[key] !== null && String(process.env[key]).trim() !== '') return;
+  const v = firstNonEmpty(candidates);
+  if (v !== undefined) process.env[key] = v;
+};
+
+ensureEnv('NODE_ENV', ['NODO_ENV', 'NNODE_ENV']);
+ensureEnv('JWT_SECRET', ['JWT_SECRETO', 'JWT_SECRETO']);
+ensureEnv('DB_NAME', ['NOMBRE_DE_LA_BASE_DE_DATOS', 'NOMBRE DE LA BASE DE DATOS']);
+ensureEnv('FRONTEND_URL', ['URL_DE_LA_PORTADA', 'URL DE LA PORTADA']);
+ensureEnv('UPLOAD_DIR', ['CARGA_DIR']);
+ensureEnv('DOWNLOAD_DIR', ['DESCARGAR_DIR']);
+
 const pool = require('./db');
 const { cleanupOnStartup } = require('./utils/fiel-cleanup');
 const authRoutes = require('./routes/auth');

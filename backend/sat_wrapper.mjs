@@ -274,14 +274,23 @@ async function actionRequest(args) {
   const end   = args.end   || start;
 
   const results   = [];
-  const MAX_RETRY = 3; // +1 para reintento automático de código 5002
-  let startSecs   = '00:00:00'; // se ajusta a '00:00:01' si SAT devuelve código 5002
+  const OFFSET_SECONDS = [0, 1, 2, 3, 5, 8, 13, 21, 34, 55];
+  const MAX_RETRY = OFFSET_SECONDS.length;
+
+  const toHms = (totalSeconds) => {
+    const s = Math.max(0, Math.min(86399, Number(totalSeconds) || 0));
+    const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  };
 
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     try {
+      const offset = OFFSET_SECONDS[attempt - 1];
       const period = DateTimePeriod.createFromValues(
-        `${start} ${startSecs}`,
-        `${end} 23:59:59`
+        `${start} ${toHms(offset)}`,
+        `${end} ${toHms(86399 - offset)}`
       );
 
       // Construir parámetros con filtros opcionales
@@ -311,10 +320,8 @@ async function actionRequest(args) {
           mensaje:                 SAT_CODES['5000'].label,
         });
         break; // éxito
-      } else if (code === '5002' && startSecs === '00:00:00' && attempt < MAX_RETRY) {
-        // SAT: límite de por vida — reintento automático con inicio +1 segundo
-        console.error(`[SAT 5002] Reintentando ${start}→${end} con +1s (intento ${attempt}/${MAX_RETRY})`);
-        startSecs = '00:00:01';
+      } else if (code === '5002' && attempt < MAX_RETRY) {
+        console.error(`[SAT 5002] Reintentando ${start}→${end} con desfase de segundos (intento ${attempt}/${MAX_RETRY})`);
         await sleep(1500);
         continue;
       } else {
