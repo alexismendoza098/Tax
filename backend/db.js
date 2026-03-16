@@ -18,9 +18,13 @@ const parseDbUrl = (rawUrl) => {
 };
 
 const resolveDbConfig = () => {
+  // Soporta variables estándar de Railway (MYSQL_URL, DATABASE_URL)
+  // y también variables en español que el usuario haya definido manualmente
   const urlConfig =
     parseDbUrl(process.env.MYSQL_URL) ||
-    parseDbUrl(process.env.DATABASE_URL);
+    parseDbUrl(process.env.DATABASE_URL) ||
+    parseDbUrl(process.env['HOST_DE_BASE_DE_DATOS']) ||
+    parseDbUrl(process.env['URL de MySQL']);
 
   const port =
     process.env.MYSQLPORT ||
@@ -36,19 +40,20 @@ const resolveDbConfig = () => {
         database: urlConfig.database,
       }
     : {
-        host: process.env.MYSQLHOST || process.env.MYSQL_HOST,
-        port: port ? Number(port) : undefined,
-        user: process.env.MYSQLUSER || process.env.MYSQL_USER,
-        password: process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD,
-        database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE,
+        // Variables automáticas de Railway MySQL plugin
+        host:     process.env.MYSQLHOST     || process.env.MYSQL_HOST    || process.env['Host MySQL'],
+        port:     port ? Number(port) : undefined,
+        user:     process.env.MYSQLUSER     || process.env.MYSQL_USER    || process.env['USUARIOMYSQL'],
+        password: process.env.MYSQLPASSWORD || process.env.MYSQL_PASSWORD|| process.env['CONTRASEÑA MYSQL'],
+        database: process.env.MYSQLDATABASE || process.env.MYSQL_DATABASE|| process.env['BASE DE DATOS MYSQL'],
       };
 
   return {
-    host: process.env.DB_HOST || base.host || 'localhost',
-    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : (base.port || 3306),
-    user: process.env.DB_USER || base.user || 'root',
+    host:     process.env.DB_HOST || base.host || 'localhost',
+    port:     process.env.DB_PORT ? Number(process.env.DB_PORT) : (base.port || 3306),
+    user:     process.env.DB_USER || base.user || 'root',
     password: process.env.DB_PASSWORD || base.password || '',
-    database: process.env.DB_NAME || base.database || 'IVATAXRECOVERY',
+    database: process.env.DB_NAME || base.database || 'ETaxes2_0',
   };
 };
 
