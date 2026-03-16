@@ -30,6 +30,7 @@ async function runMigration(pool, sqlFile) {
     raw.split('\n')
        .map(line => line.replace(/\r$/, ''))           // strip \r (Windows)
        .filter(line => !line.trim().startsWith('--'))  // quitar líneas de comentario
+       .filter(line => !/^\s*USE\s+\S/i.test(line))   // ignorar USE db — el pool ya apunta a la DB correcta
        .join('\n');
 
   const statements = stripComments(content)
