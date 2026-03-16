@@ -45,7 +45,7 @@ const resolveDbConfig = () => {
 
   return {
     host: process.env.DB_HOST || base.host || 'localhost',
-    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : (base.port || 3307),
+    port: process.env.DB_PORT ? Number(process.env.DB_PORT) : (base.port || 3306),
     user: process.env.DB_USER || base.user || 'root',
     password: process.env.DB_PASSWORD || base.password || '',
     database: process.env.DB_NAME || base.database || 'IVATAXRECOVERY',

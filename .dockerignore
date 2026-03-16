@@ -1,0 +1,35 @@
+# Node modules
+node_modules/
+backend/node_modules/
+npm-debug.log*
+
+# Variables de entorno (nunca subir al contenedor)
+.env
+backend/.env
+*.env
+
+# Archivos de desarrollo
+.git/
+.gitignore
+.claude/
+*.bat
+*.sh
+*.py
+*.zip
+*.exe
+ngrok*
+
+# Archivos de descarga/upload (efímeros, no van en la imagen)
+downloads/
+uploads/
+backend/downloads/
+backend/uploads/
+
+# Documentación y archivos temporales
+README*.md
+*.txt
+continuar\ charla/
+CFDI/
+csharp/
+backend/__pycache__/
+backend/temp_*/
