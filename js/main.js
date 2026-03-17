@@ -249,6 +249,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Si no hay token, loginOverlay queda visible (correcto)
 
+    // Limitar inputs de fecha al día de hoy (SAT no acepta fechas futuras)
+    const todayStr = new Date().toISOString().slice(0, 10);
+    ['date-start', 'date-end', 'date-full-start', 'date-full-end'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.max = todayStr;
+            // Si el valor guardado es futuro, corregirlo a hoy
+            if (el.value && el.value > todayStr) el.value = todayStr;
+        }
+    });
+
     // Pre-fill RFC if available
     const lastRfc = localStorage.getItem('last_rfc');
     const rfcInput = document.getElementById('rfc-input');
@@ -985,6 +996,10 @@ async function requestDownloadSat() {
         // El backend ahora responde INMEDIATAMENTE con un jobId
         if (data.jobId) {
             addSimLine(output, `✅ Solicitud aceptada — Job ID: ${data.jobId.substring(0, 8)}...`, 'success');
+            // Avisar si la fecha final fue capeada a hoy
+            if (data.effectiveEnd && data.effectiveEnd !== document.getElementById('date-end')?.value) {
+                addSimLine(output, `⚠️ Fecha final ajustada a ${data.effectiveEnd} (SAT no acepta fechas futuras)`, 'warning');
+            }
             addSimLine(output, `⏳ Procesando ${data.totalChunks} período(s) en background...`, 'info');
             // Poll for job completion
             await pollJobStatus(data.jobId, output, progFill, progPct, data.totalChunks);

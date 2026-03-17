@@ -47,18 +47,29 @@ router.post('/request', authMiddleware, async (req, res) => {
         });
     }
 
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const startDate = new Date(start + 'T12:00:00');
+    let   endDate   = new Date(end   + 'T12:00:00');
     if (isNaN(startDate) || isNaN(endDate)) {
         return res.status(400).json({ error: 'Fechas inválidas.' });
     }
+
+    // SAT rechaza fechas futuras — capear la fecha final a hoy en México (UTC-6)
+    const mexicoToday = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    mexicoToday.setUTCHours(12, 0, 0, 0);
+    if (endDate > mexicoToday) {
+        console.log(`[SAT] Fecha final ${end} está en el futuro — capeando a ${mexicoToday.toISOString().slice(0,10)}`);
+        endDate = mexicoToday;
+    }
+
+    const effectiveEnd = endDate.toISOString().slice(0, 10);
+
     if (startDate > endDate) {
         return res.status(400).json({
-            error: `La fecha inicial (${start}) no puede ser mayor que la final (${end}).`
+            error: `La fecha inicial (${start}) no puede ser mayor que la final (${effectiveEnd}).`
         });
     }
 
-    const dateChunks = getDateChunks(start, end);
+    const dateChunks = getDateChunks(start, effectiveEnd);
     if (dateChunks.length === 0) {
         return res.status(400).json({ error: 'No se generaron períodos válidos para las fechas dadas.' });
     }
@@ -79,18 +90,22 @@ router.post('/request', authMiddleware, async (req, res) => {
     });
 
     // Responder al cliente YA (evita 502 del proxy)
+    const cappedMsg = effectiveEnd !== end
+        ? ` (fecha final ajustada a ${effectiveEnd} — SAT no acepta fechas futuras)`
+        : '';
     res.json({
         status: 'accepted',
         jobId,
         groupId,
-        message: `Solicitud aceptada. Procesando ${dateChunks.length} período(s) en background.`,
+        effectiveEnd,
+        message: `Solicitud aceptada. Procesando ${dateChunks.length} período(s) en background.${cappedMsg}`,
         totalChunks: dateChunks.length
     });
 
     // --- Procesamiento en background (no bloquea la respuesta HTTP) ---
     processRequestInBackground({
         jobId, groupId, rfc, password, paths,
-        start, end, type, cfdi_type, status,
+        start, end: effectiveEnd, type, cfdi_type, status,
         dateChunks,
         usuarioId: req.user.id  // ← propagado para guardar en solicitudes_sat
     });
