@@ -1819,11 +1819,25 @@ async function downloadRequest(id, options = {}) {
         const data = await res.json();
 
         if (res.ok) {
+            // Detectar fallo real aunque HTTP sea 200 (backend devuelve partial_error)
+            const allFailed = data.results && data.results.length > 0 && data.results.every(r => r.status === 'error');
+            const singleFailed = data.status === 'error' || data.error;
+
             if (!options.silent) {
-                alert('Descarga iniciada/completada. Los paquetes aparecerán en el Paso 3.');
-                loadDownloadHistory();
+                if (allFailed || singleFailed) {
+                    const errMsg = (data.results && data.results[0]?.error) || data.error || 'La descarga falló en el servidor.';
+                    alert('Error en la descarga: ' + errMsg);
+                } else {
+                    showToast('success', 'Descarga completada ✅', 'Los paquetes están disponibles en el Paso 3.', 5000);
+                    loadDownloadHistory();
+                    // Refrescar Paso 3 para que los paquetes aparezcan de inmediato
+                    if (typeof loadFlattenPackages === 'function') loadFlattenPackages();
+                }
+            } else {
+                // En modo silencioso, igual refrescar Paso 3
+                if (typeof loadFlattenPackages === 'function') loadFlattenPackages();
             }
-            return true;
+            return !(allFailed || singleFailed);
         } else {
             if (!options.silent) alert('Error: ' + (data.error || 'Error en la descarga'));
             throw new Error(data.error);

@@ -641,14 +641,19 @@ router.get('/packages', authMiddleware, async (req, res) => {
 
         const allFiles = getFiles(DOWNLOADS_DIR);
 
+        // ── RFCs del usuario (para fallback de archivos sin solicitudes_sat) ────
+        const [rfcRows] = await pool.query(
+            'SELECT rfc FROM contribuyentes WHERE usuario_id = ?', [req.user.id]
+        );
+        const userRfcs = new Set(rfcRows.map(r => r.rfc.toUpperCase()));
+
         // ── Mapa pkgId → {tipo, direccion} desde solicitudes_sat ──────────────
         // Aislamiento: solo paquetes del usuario autenticado
         // (con fallback para datos históricos sin usuario_id asignado)
         const [solicitudes] = await pool.query(`
-            SELECT tipo_solicitud, tipo_comprobante, paquetes
+            SELECT tipo_solicitud, tipo_comprobante, paquetes, rfc
             FROM solicitudes_sat
-            WHERE paquetes IS NOT NULL
-              AND (
+            WHERE (
                 usuario_id = ?
                 OR (usuario_id IS NULL AND rfc IN (
                       SELECT rfc FROM contribuyentes WHERE usuario_id = ?
@@ -661,10 +666,11 @@ router.get('/packages', authMiddleware, async (req, res) => {
         const userPkgIds = new Set();
         solicitudes.forEach(sol => {
             try {
-                JSON.parse(sol.paquetes || '[]').forEach(pid => {
+                const pqs = JSON.parse(sol.paquetes || '[]');
+                pqs.forEach(pid => {
                     const entry = { tipo: sol.tipo_solicitud, dir: sol.tipo_comprobante };
                     pkgMap[pid] = entry;
-                    pkgMap[normalizePkgId(pid)] = entry; // lookup flexible (sin _01, sin extensión)
+                    pkgMap[normalizePkgId(pid)] = entry;
                     userPkgIds.add(pid);
                     userPkgIds.add(normalizePkgId(pid));
                 });
@@ -688,10 +694,13 @@ router.get('/packages', authMiddleware, async (req, res) => {
             ? fs.statSync(path.join(DOWNLOADS_DIR, metaReports[metaReports.length - 1])).mtime
             : null;
 
-        // Filtrar allFiles a solo los paquetes que pertenecen al usuario
+        // ── Filtrar: paquetes con solicitud registrada O en carpeta del RFC del usuario ─
         const userFiles = allFiles.filter(filePath => {
             const pkgId = path.basename(filePath).replace(/\.(zip|txt)$/i, '');
-            return userPkgIds.has(pkgId) || userPkgIds.has(normalizePkgId(pkgId));
+            if (userPkgIds.has(pkgId) || userPkgIds.has(normalizePkgId(pkgId))) return true;
+            // Fallback: el archivo está dentro de una carpeta cuyo nombre es un RFC del usuario
+            const parentDir = path.basename(path.dirname(filePath)).toUpperCase();
+            return userRfcs.has(parentDir);
         });
 
         const packages = userFiles.map(filePath => {
