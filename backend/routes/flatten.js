@@ -611,20 +611,28 @@ router.get('/preview/:packageId', authMiddleware, async (req, res) => {
 
 router.get('/packages', authMiddleware, async (req, res) => {
     try {
-        // ── DB-FIRST: leer paquetes desde solicitudes_sat (persiste en Railway) ─
-        // Aislamiento: solo paquetes del usuario autenticado
+        // ── DB-FIRST: leer desde solicitudes_sat (persiste en Railway) ──────────
+        // Incluye:
+        //   a) Solicitudes con paquetes ya conocidos (paquetes IS NOT NULL)
+        //   b) Solicitudes Terminadas (estado=3) sin paquetes → el usuario puede re-verificar
         const [solicitudes] = await pool.query(`
-            SELECT rfc, tipo_solicitud, tipo_comprobante, paquetes, fecha_descarga
+            SELECT rfc, tipo_solicitud, tipo_comprobante, paquetes,
+                   fecha_descarga, id_solicitud, estado_solicitud
             FROM solicitudes_sat
-            WHERE paquetes IS NOT NULL AND paquetes != '[]' AND paquetes != 'null'
+            WHERE (
+                    (paquetes IS NOT NULL AND paquetes != '[]' AND paquetes != 'null')
+                    OR estado_solicitud = 3
+                  )
               AND (
                 usuario_id = ?
                 OR (usuario_id IS NULL AND rfc IN (
                       SELECT rfc FROM contribuyentes WHERE usuario_id = ?
                     ))
               )
-            ORDER BY fecha_descarga DESC
+            ORDER BY COALESCE(fecha_descarga, fecha_solicitud) DESC
+            LIMIT 500
         `, [req.user.id, req.user.id]);
+        console.log(`[Packages] Usuario ${req.user.id}: ${solicitudes.length} solicitudes encontradas`);
 
         // ── "Procesado" para CFDI: verificar en comprobantes del usuario ──────
         const [cfdiRows] = await pool.query(`
@@ -642,6 +650,32 @@ router.get('/packages', authMiddleware, async (req, res) => {
         for (const sol of solicitudes) {
             let pkgIds = [];
             try { pkgIds = JSON.parse(sol.paquetes || '[]'); } catch (_) { continue; }
+
+            // Solicitud Terminada pero sin paquetes → mostrar como "pendiente de descarga"
+            if (pkgIds.length === 0 && sol.estado_solicitud == 3) {
+                const solKey = `sol-${sol.id_solicitud}`;
+                if (!seen.has(solKey)) {
+                    seen.add(solKey);
+                    const type      = sol.tipo_solicitud || 'CFDI';
+                    const direccion = sol.tipo_comprobante === 'Issued'   ? 'Emitido'
+                                    : sol.tipo_comprobante === 'Received' ? 'Recibido'
+                                    : 'Sin clasificar';
+                    packages.push({
+                        name:           `${sol.id_solicitud}.zip`,
+                        pkgId:          sol.id_solicitud,
+                        solicitudId:    sol.id_solicitud,
+                        rfc:            (sol.rfc || '').toUpperCase(),
+                        type,
+                        direccion,
+                        processed:      false,
+                        file_available: false,
+                        needs_download: true,  // solicitud lista pero sin paquetes conocidos
+                        size:           'N/A',
+                        date:           sol.fecha_descarga || new Date(),
+                    });
+                }
+                continue;
+            }
 
             for (const pid of pkgIds) {
                 const normId = normalizePkgId(pid);
@@ -674,7 +708,7 @@ router.get('/packages', authMiddleware, async (req, res) => {
                 const fileAvailable = filePath !== null;
                 const isProcessed   = type === 'CFDI'
                     ? (processedCfdiIds.has(pid) || processedCfdiIds.has(normId))
-                    : false; // Metadata: marcar al procesar
+                    : false;
 
                 packages.push({
                     name:          fileName,

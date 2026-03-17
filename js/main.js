@@ -2171,25 +2171,28 @@ function _renderPackageGroups(packages, container) {
             const pkgId = pkg.pkgId || pkg.name.replace(/\.(zip|txt)$/i, '');
             const fileOk = pkg.file_available !== false; // undefined = legacy (asume ok)
             const isSelected = fileOk && selectedPackages.has(pkgId);
+            const needsDl = pkg.needs_download === true;
             const statusBadge = pkg.processed
-                ? '<span class="badge bg-success" style="font-size:0.7em">Procesado</span>'
-                : fileOk
-                    ? '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>'
-                    : '<span class="badge bg-warning text-dark" style="font-size:0.7em">⚠ Sin archivo</span>';
+                ? '<span class="badge bg-success" style="font-size:0.7em">✓ Procesado</span>'
+                : needsDl
+                    ? '<span class="badge bg-info text-dark" style="font-size:0.7em">📥 Descargar</span>'
+                    : fileOk
+                        ? '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>'
+                        : '<span class="badge bg-warning text-dark" style="font-size:0.7em">⚠ Sin archivo</span>';
 
             const card = document.createElement('div');
-            card.className = `package-card ${isSelected ? 'selected' : ''} ${!fileOk ? 'pkg-unavailable' : ''}`;
+            card.className = `package-card ${isSelected ? 'selected' : ''} ${(!fileOk || needsDl) ? 'pkg-unavailable' : ''}`;
             card.dataset.pkgid = pkgId;
             card.dataset.group = grupo.key;
             card.dataset.type = (pkg.type || 'CFDI').toLowerCase();
             // Solo seleccionable si el archivo está disponible en disco
-            if (fileOk) card.onclick = () => toggleSelectPackage(pkgId, card);
+            if (fileOk && !needsDl) card.onclick = () => toggleSelectPackage(pkgId, card);
 
-            const redownloadBtn = !fileOk
+            const redownloadBtn = (!fileOk || needsDl)
                 ? `<button class="btn btn-xs btn-outline-warning ms-1" style="font-size:0.7em;padding:2px 6px"
-                     title="El archivo ZIP se perdió al reiniciar Railway. Vuelve a descargarlo desde Mis Solicitudes."
-                     onclick="event.stopPropagation();showStep(2);showToast('info','Re-descargar','Ve a Mis Solicitudes y descarga este paquete de nuevo.')">
-                     <i class="fas fa-redo"></i> Re-descargar
+                     title="Ve a Mis Solicitudes y descarga este paquete."
+                     onclick="event.stopPropagation();showStep(2);showToast('info','Re-descargar','Ve a Mis Solicitudes → botón Descargar en esta solicitud.')">
+                     <i class="fas fa-download"></i> Descargar
                    </button>`
                 : '';
 
