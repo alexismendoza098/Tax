@@ -28,16 +28,24 @@ router.post('/request', authMiddleware, async (req, res) => {
     const { rfc, password, start, end, type, cfdi_type, status } = req.body;
     console.log(`[SAT] Nueva solicitud — RFC: ${rfc}, ${start} → ${end}, tipo: ${type}`);
 
-    // --- Validaciones síncronas (rápidas) ---
-    // Aislamiento: validar que el RFC pertenezca a un contribuyente del usuario autenticado
+    // --- Aislamiento: auto-registrar RFC si el usuario lo está usando por primera vez ---
+    // Ya no bloqueamos con 403 — si el RFC no está en contribuyentes, se agrega automáticamente.
+    // Esto permite que cualquier usuario opere con su RFC sin pasos de configuración previos.
+    const rfcUpper = (rfc || '').toUpperCase();
     const [contribRows] = await pool.query(
         'SELECT id FROM contribuyentes WHERE rfc = ? AND usuario_id = ?',
-        [(rfc || '').toUpperCase(), req.user.id]
+        [rfcUpper, req.user.id]
     );
     if (!contribRows.length) {
-        return res.status(403).json({
-            error: `RFC ${rfc} no pertenece a tu cuenta. Regístralo en Contribuyentes primero.`
-        });
+        try {
+            await pool.query(
+                'INSERT IGNORE INTO contribuyentes (rfc, nombre, usuario_id) VALUES (?, ?, ?)',
+                [rfcUpper, rfcUpper, req.user.id]
+            );
+            console.log(`[SAT] RFC ${rfcUpper} auto-registrado para usuario ${req.user.id}`);
+        } catch (autoErr) {
+            console.warn(`[SAT] No se pudo auto-registrar RFC ${rfcUpper}:`, autoErr.message);
+        }
     }
 
     const paths = getPaths(rfc);

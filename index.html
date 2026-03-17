@@ -1706,19 +1706,16 @@
                     <div class="clients-header-left">
                         <div class="clients-icon"><i class="fas fa-users-cog"></i></div>
                         <div>
-                            <h2 class="clients-title">Gestión de Clientes</h2>
-                            <p class="clients-subtitle">Administra los contribuyentes del despacho</p>
+                            <h2 class="clients-title">Gestión de Usuarios</h2>
+                            <p class="clients-subtitle">Administra los usuarios del sistema</p>
                         </div>
                     </div>
                     <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-                        <button class="btn-fiscal-dash" onclick="showSection('fiscal')">
-                            <i class="fas fa-chart-line"></i> Fiscal
-                        </button>
                         <button class="btn-cleanup-sys" onclick="openCleanupModal()">
                             <i class="fas fa-broom"></i> Limpiar Sistema
                         </button>
                         <button class="btn-client-new" onclick="openUserModal()">
-                            <i class="fas fa-user-plus"></i> Nuevo Cliente
+                            <i class="fas fa-user-plus"></i> Nuevo Usuario
                         </button>
                     </div>
                 </div>
@@ -2119,8 +2116,8 @@
             <div class="client-modal-header">
                 <div class="client-modal-icon"><i class="fas fa-user-tie"></i></div>
                 <div>
-                    <h2 id="user-modal-title" class="client-modal-title">Nuevo Cliente</h2>
-                    <p class="client-modal-sub" id="user-modal-sub">Completa los datos del contribuyente</p>
+                    <h2 id="user-modal-title" class="client-modal-title">Nuevo Usuario</h2>
+                    <p class="client-modal-sub" id="user-modal-sub">Completa los datos de acceso</p>
                 </div>
                 <button class="client-modal-close" onclick="closeUserModal()"><i class="fas fa-times"></i></button>
             </div>
@@ -2128,23 +2125,23 @@
             <form onsubmit="saveUser(event)" class="client-modal-form">
                 <input type="hidden" id="user-id">
 
-                <!-- Sección: Datos del contribuyente -->
-                <div class="cmf-section-label"><i class="fas fa-id-card"></i> Datos Fiscales</div>
+                <!-- Sección: Datos del usuario -->
+                <div class="cmf-section-label"><i class="fas fa-user"></i> Información del Usuario</div>
                 <div class="cmf-row">
                     <div class="cmf-field">
-                        <label class="cmf-label">Nombre Completo / Razón Social <span class="cmf-req">*</span></label>
-                        <input type="text" class="cmf-input" id="user-nombre" placeholder="Pedro Alexis Mendoza Sánchez" required>
+                        <label class="cmf-label">Nombre Completo</label>
+                        <input type="text" class="cmf-input" id="user-nombre" placeholder="Pedro Alexis Mendoza Sánchez">
                     </div>
                     <div class="cmf-field cmf-field-sm">
-                        <label class="cmf-label">RFC <span class="cmf-req">*</span></label>
+                        <label class="cmf-label">RFC <span style="font-size:0.75em;color:#9ca3af;">(opcional)</span></label>
                         <input type="text" class="cmf-input" id="user-rfc" placeholder="MESP980407UD4" maxlength="13"
-                               style="text-transform: uppercase;" oninput="this.value=this.value.toUpperCase()" required>
+                               style="text-transform: uppercase;" oninput="this.value=this.value.toUpperCase()">
                     </div>
                 </div>
                 <div class="cmf-row">
                     <div class="cmf-field">
                         <label class="cmf-label">Correo Electrónico</label>
-                        <input type="email" class="cmf-input" id="user-email" placeholder="cliente@dominio.com">
+                        <input type="email" class="cmf-input" id="user-email" placeholder="usuario@dominio.com">
                     </div>
                 </div>
 
@@ -2166,7 +2163,7 @@
                     <div class="cmf-field cmf-field-sm">
                         <label class="cmf-label">Rol</label>
                         <select class="cmf-input" id="user-role">
-                            <option value="user">Cliente (Usuario)</option>
+                            <option value="user">Usuario</option>
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
@@ -2177,7 +2174,7 @@
                         <i class="fas fa-times"></i> Cancelar
                     </button>
                     <button type="submit" class="cmf-btn-save">
-                        <i class="fas fa-save"></i> Guardar Cliente
+                        <i class="fas fa-save"></i> Guardar Usuario
                     </button>
                 </div>
             </form>

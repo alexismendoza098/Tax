@@ -61,22 +61,24 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
             return res.status(400).json({ error: 'Username y password son requeridos' });
         }
 
-        // Validar formato RFC si se proporciona
-        if (rfc) {
+        // RFC es completamente opcional — normalizar a NULL si viene vacío
+        const rfcUpper = (rfc && rfc.trim()) ? rfc.trim().toUpperCase() : null;
+
+        // Validar formato RFC solo si se proporcionó
+        if (rfcUpper) {
             const rfcRegex = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/i;
-            if (!rfcRegex.test(rfc.trim())) {
-                return res.status(400).json({ error: 'Formato de RFC inválido' });
+            if (!rfcRegex.test(rfcUpper)) {
+                return res.status(400).json({ error: 'Formato de RFC inválido (ejemplo: XAXX010101000)' });
             }
         }
 
         // Verificar username único
         const [existing] = await pool.query('SELECT id FROM usuarios WHERE username = ?', [username]);
         if (existing.length > 0) {
-            return res.status(409).json({ error: 'El usuario ya existe' });
+            return res.status(409).json({ error: 'El nombre de usuario ya existe' });
         }
 
         const password_hash = await bcrypt.hash(password, 10);
-        const rfcUpper = rfc ? rfc.trim().toUpperCase() : null;
 
         const [result] = await pool.query(
             'INSERT INTO usuarios (username, rfc, nombre, email, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)',
@@ -94,7 +96,7 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
         }
 
         res.status(201).json({
-            message: 'Cliente creado exitosamente',
+            message: 'Usuario creado exitosamente',
             user: { id: newUserId, username, rfc: rfcUpper, nombre, email, role: role || 'user' }
         });
     } catch (err) {

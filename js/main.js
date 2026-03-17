@@ -2779,7 +2779,7 @@ function openUserModal(user = null) {
     document.getElementById('user-password').value = '';
     document.getElementById('user-role').value     = isEdit ? (user.role || 'user') : 'user';
 
-    document.getElementById('user-modal-title').textContent = isEdit ? 'Editar Cliente' : 'Nuevo Cliente';
+    document.getElementById('user-modal-title').textContent = isEdit ? 'Editar Usuario' : 'Nuevo Usuario';
     document.getElementById('user-modal-sub')?.setAttribute('style', '');
 
     // Mostrar/ocultar hint de contraseña
@@ -2818,11 +2818,15 @@ async function saveUser(e) {
     const password = document.getElementById('user-password').value;
     const role     = document.getElementById('user-role').value;
 
-    const payload = { nombre, rfc, email, role };
+    // RFC es opcional — solo incluir si no está vacío
+    const payload = { email, role };
+    if (nombre) payload.nombre = nombre;
+    if (rfc)    payload.rfc    = rfc;   // solo si el admin lo proporcionó
+
     if (!id) {
-        if (!username) { showToast('error', 'Validación', 'El usuario es requerido'); return; }
+        if (!username) { showToast('error', 'Validación', 'El nombre de usuario es requerido'); return; }
         payload.username = username;
-        if (!password) { showToast('error', 'Validación', 'La contraseña es requerida para nuevos clientes'); return; }
+        if (!password)  { showToast('error', 'Validación', 'La contraseña es requerida para nuevos usuarios'); return; }
     }
     if (password) payload.password = password;
 
@@ -2836,7 +2840,7 @@ async function saveUser(e) {
         if (res.ok) {
             closeUserModal();
             loadUsers();
-            showToast('success', 'Listo', id ? 'Cliente actualizado correctamente' : 'Cliente creado exitosamente');
+            showToast('success', 'Listo', id ? 'Usuario actualizado correctamente' : 'Usuario creado exitosamente');
         } else {
             showToast('error', 'Error', data.error);
         }
