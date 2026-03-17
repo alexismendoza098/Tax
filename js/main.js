@@ -1835,8 +1835,10 @@ async function downloadRequest(id, options = {}) {
 
         if (res.ok) {
             if (!options.silent) {
-                alert('Descarga iniciada/completada. Los paquetes aparecerán en el Paso 3.');
                 loadDownloadHistory();
+                // Navegar al Paso 3 y refrescar la lista de paquetes automáticamente
+                showStep(3);
+                showToast('success', 'Descarga completada', 'Los paquetes están listos para procesar en el Paso 3.');
             }
             return true;
         } else {
