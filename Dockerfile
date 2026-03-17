@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
 # Instalar dependencias del sistema (Python para sat_wrapper.py + bash para scripts)
-RUN apk add --no-cache python3 py3-pip bash
+RUN apk add --no-cache python3 py3-pip bash && pip3 install cfdiclient --break-system-packages || pip3 install cfdiclient
 
 WORKDIR /app
 
@@ -24,6 +24,7 @@ RUN mkdir -p ./backend/uploads ./backend/downloads ./backend/uploads/temp_flatte
 EXPOSE 3000
 
 # Arrancar desde la carpeta del backend
-# 1º corre migraciones (crea tablas si no existen) → 2º inicia servidor
+# Railway sobreescribe CMD con startCommand de railway.json: "node server.js"
+# Las migraciones NO se corren aquí (el schema ya existe en Railway DB)
 WORKDIR /app/backend
-CMD ["sh", "-c", "node scripts/migrate.js; node server.js"]
+CMD ["node", "server.js"]

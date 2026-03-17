@@ -19,7 +19,7 @@ const fs       = require('fs');
 const AdmZip   = require('adm-zip');
 const pool     = require('../../db');
 const { randomUUID } = require('crypto');
-const { runSatScript, getPaths, SAT_STATUS_CODES } = require('../../utils/satHelpers');
+const { runSatScript, getPaths, cleanTempPaths, SAT_STATUS_CODES } = require('../../utils/satHelpers');
 const { authMiddleware } = require('../../middleware/auth');
 
 // In-memory jobs (same pattern as requests.js)
@@ -184,6 +184,7 @@ async function processBulkYear(jobId, job, rfc, password, paths) {
     job.status  = 'error';
     job.message = `No se pudo solicitar ningún mes. Errores: ${job.errors.slice(0, 3).join(' | ')}`;
     job.finishedAt = new Date().toISOString();
+    cleanTempPaths(paths);
     return;
   }
 
@@ -252,6 +253,7 @@ async function processBulkYear(jobId, job, rfc, password, paths) {
     job.status  = 'partial';
     job.message = 'Las solicitudes no generaron paquetes descargables. Puede que no haya CFDIs en esos periodos.';
     job.finishedAt = new Date().toISOString();
+    cleanTempPaths(paths);
     return;
   }
 
@@ -292,6 +294,7 @@ async function processBulkYear(jobId, job, rfc, password, paths) {
     job.status  = 'error';
     job.message = 'No se pudo descargar ningún paquete. ' + job.errors.slice(0, 2).join(' | ');
     job.finishedAt = new Date().toISOString();
+    cleanTempPaths(paths);
     return;
   }
 
@@ -372,6 +375,9 @@ async function processBulkYear(jobId, job, rfc, password, paths) {
   if (job.errors.length > 0) {
     job.message += ` | ⚠️ ${job.errors.length} advertencias`;
   }
+
+  // Limpiar archivos FIEL temporales de /tmp
+  cleanTempPaths(paths);
 
   // Auto-cleanup after 2 hours
   setTimeout(() => bulkJobs.delete(jobId), 2 * 60 * 60 * 1000);

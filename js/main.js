@@ -249,6 +249,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Si no hay token, loginOverlay queda visible (correcto)
 
+    // Limitar inputs de fecha al día de hoy (SAT no acepta fechas futuras)
+    const todayStr = new Date().toISOString().slice(0, 10);
+    ['date-start', 'date-end', 'date-full-start', 'date-full-end'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.max = todayStr;
+            // Si el valor guardado es futuro, corregirlo a hoy
+            if (el.value && el.value > todayStr) el.value = todayStr;
+        }
+    });
+
     // Pre-fill RFC if available
     const lastRfc = localStorage.getItem('last_rfc');
     const rfcInput = document.getElementById('rfc-input');
@@ -985,6 +996,10 @@ async function requestDownloadSat() {
         // El backend ahora responde INMEDIATAMENTE con un jobId
         if (data.jobId) {
             addSimLine(output, `✅ Solicitud aceptada — Job ID: ${data.jobId.substring(0, 8)}...`, 'success');
+            // Avisar si la fecha final fue capeada a hoy
+            if (data.effectiveEnd && data.effectiveEnd !== document.getElementById('date-end')?.value) {
+                addSimLine(output, `⚠️ Fecha final ajustada a ${data.effectiveEnd} (SAT no acepta fechas futuras)`, 'warning');
+            }
             addSimLine(output, `⏳ Procesando ${data.totalChunks} período(s) en background...`, 'info');
             // Poll for job completion
             await pollJobStatus(data.jobId, output, progFill, progPct, data.totalChunks);
@@ -1714,7 +1729,12 @@ window.downloadGroup = async (gid) => {
         }
 
         loadDownloadHistory();
-        alert(`Se iniciaron ${count} descargas. Revisa el progreso en unos momentos.`);
+        if (count > 0) {
+            selectStep(3); // navega a Paso 3 y refresca la lista de paquetes
+            showToast('success', `${count} descarga(s) completada(s)`, 'Los paquetes están listos en el Paso 3.');
+        } else {
+            showToast('error', 'Sin descargas', 'No se pudo completar ninguna descarga.');
+        }
     }
 };
 
@@ -1824,23 +1844,10 @@ async function downloadRequest(id, options = {}) {
             const singleFailed = data.status === 'error' || data.error;
 
             if (!options.silent) {
-                if (allFailed || singleFailed) {
-                    const errMsg = (data.results && data.results[0]?.error) || data.error || 'La descarga falló en el servidor.';
-                    showToast('error', 'Error en la descarga ❌', errMsg, 8000);
-                } else {
-                    const parcial = data.status === 'partial_success';
-                    showToast('success',
-                        parcial ? 'Descarga parcial ⚠️' : 'Descarga completada ✅',
-                        parcial ? `${data.message} — yendo al Paso 3` : 'Paquetes disponibles — yendo al Paso 3.',
-                        5000);
-                    loadDownloadHistory();
-                    // Navegar automáticamente al Paso 3 y recargar lista de paquetes
-                    if (typeof selectStep === 'function') selectStep(3);
-                    else if (typeof loadFlattenPackages === 'function') loadFlattenPackages();
-                }
-            } else {
-                // En modo silencioso, igual refrescar Paso 3
-                if (typeof loadFlattenPackages === 'function') loadFlattenPackages();
+                loadDownloadHistory();
+                // Navegar al Paso 3 y refrescar la lista de paquetes automáticamente
+                selectStep(3);
+                showToast('success', 'Descarga completada', 'Los paquetes están listos para procesar en el Paso 3.');
             }
             return !(allFailed || singleFailed);
         } else {
@@ -2063,7 +2070,8 @@ async function loadFlattenPackages() {
             listContainer.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-box-open"></i>
-                    <p>No se encontraron paquetes en el servidor</p>
+                    <p>No hay paquetes descargados</p>
+                    <small style="color:#9ca3af">Ve al Paso 2, verifica tus solicitudes y descarga los paquetes disponibles.</small>
                 </div>
             `;
             return;
@@ -2164,43 +2172,43 @@ function _renderPackageGroups(packages, container) {
 
         const body = document.getElementById(`pkgsec-${grupo.key}`);
         pkgs.forEach(pkg => {
-            const pkgId = pkg.name.replace(/\.(zip|txt)$/i, '');
-            const isSelected = selectedPackages.has(pkgId);
-            const isMissing  = !!pkg.missing; // archivo en DB pero borrado por Railway FS
-
-            const statusBadge = isMissing
-                ? '<span class="badge bg-warning text-dark" style="font-size:0.7em"><i class="fas fa-exclamation-triangle"></i> Archivo perdido</span>'
-                : pkg.processed
-                    ? '<span class="badge bg-success" style="font-size:0.7em">Procesado</span>'
-                    : '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>';
+            const pkgId = pkg.pkgId || pkg.name.replace(/\.(zip|txt)$/i, '');
+            const fileOk = pkg.file_available !== false; // undefined = legacy (asume ok)
+            const isSelected = fileOk && selectedPackages.has(pkgId);
+            const needsDl = pkg.needs_download === true;
+            const statusBadge = pkg.processed
+                ? '<span class="badge bg-success" style="font-size:0.7em">✓ Procesado</span>'
+                : needsDl
+                    ? '<span class="badge bg-info text-dark" style="font-size:0.7em">📥 Descargar</span>'
+                    : fileOk
+                        ? '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>'
+                        : '<span class="badge bg-warning text-dark" style="font-size:0.7em">⚠ Sin archivo</span>';
 
             const card = document.createElement('div');
-            card.className = `package-card ${isSelected ? 'selected' : ''} ${isMissing ? 'pkg-missing' : ''}`;
+            card.className = `package-card ${isSelected ? 'selected' : ''} ${(!fileOk || needsDl) ? 'pkg-unavailable' : ''}`;
             card.dataset.pkgid = pkgId;
             card.dataset.group = grupo.key;
             card.dataset.type = (pkg.type || 'CFDI').toLowerCase();
-            // Si está missing, no seleccionar; mostrar botón Re-descargar
-            if (!isMissing) card.onclick = () => toggleSelectPackage(pkgId, card);
+            // Solo seleccionable si el archivo está disponible en disco
+            if (fileOk && !needsDl) card.onclick = () => toggleSelectPackage(pkgId, card);
 
-            const redownloadBtn = isMissing
-                ? `<button class="btn btn-xs btn-warning ms-1"
-                        style="font-size:0.7em;padding:2px 7px"
-                        title="El archivo fue borrado por el servidor. Re-descárgalo desde el Paso 2."
-                        onclick="event.stopPropagation(); redownloadMissingPackage('${pkgId}', '${pkg.rfc || ''}')">
-                        <i class="fas fa-redo"></i> Re-descargar
-                    </button>`
+            const redownloadBtn = (!fileOk || needsDl)
+                ? `<button class="btn btn-xs btn-outline-warning ms-1" style="font-size:0.7em;padding:2px 6px"
+                     title="Ve a Mis Solicitudes y descarga este paquete."
+                     onclick="event.stopPropagation();selectStep(2);showToast('info','Re-descargar','Ve a Mis Solicitudes → botón Descargar en esta solicitud.')">
+                     <i class="fas fa-download"></i> Descargar
+                   </button>`
                 : '';
 
             card.innerHTML = `
-                <div class="pkg-icon"><i class="fas ${grupo.icon}" style="color:${isMissing ? '#f59e0b' : grupo.color}"></i></div>
+                <div class="pkg-icon"><i class="fas ${grupo.icon}" style="color:${fileOk ? grupo.color : '#9ca3af'}"></i></div>
                 <div class="pkg-info">
-                    <div class="pkg-name">${pkg.name}</div>
+                    <div class="pkg-name" style="color:${fileOk ? '' : '#9ca3af'}">${pkg.name}</div>
                     <div class="pkg-meta">${pkg.size} · ${new Date(pkg.date).toLocaleDateString()}</div>
-                    ${isMissing ? '<div class="pkg-meta" style="color:#f59e0b;font-size:0.7em"><i class="fas fa-info-circle"></i> Railway borró este archivo. Usa Re-descargar o ve al Paso 2.</div>' : ''}
+                    ${!fileOk ? '<div class="pkg-meta" style="color:#f59e0b;font-size:0.7em"><i class="fas fa-info-circle"></i> Railway borró este archivo. Usa el botón Descargar.</div>' : ''}
                 </div>
-                ${statusBadge}
-                ${redownloadBtn}
-                <div class="pkg-check"><i class="fas ${isSelected && !isMissing ? 'fa-check-square' : 'fa-square'}"></i></div>
+                ${statusBadge}${redownloadBtn}
+                ${fileOk ? `<div class="pkg-check"><i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'}"></i></div>` : ''}
             `;
             body.appendChild(card);
         });

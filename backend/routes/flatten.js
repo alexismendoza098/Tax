@@ -611,73 +611,33 @@ router.get('/preview/:packageId', authMiddleware, async (req, res) => {
 
 router.get('/packages', authMiddleware, async (req, res) => {
     try {
-        // Asegurar que el directorio exista (no crashear si no existe en Railway)
-        if (!fs.existsSync(DOWNLOADS_DIR)) {
-            try { fs.mkdirSync(DOWNLOADS_DIR, { recursive: true }); } catch (_) {}
-        }
-        
-        // Helper to get files recursively
-        // Excluye "temp_extract" y "temp_flatten" — son directorios temporales de 1a.py
-        const SKIP_DIRS = new Set(['temp_extract', 'temp_flatten']);
-        const getFiles = (dir) => {
-            let results = [];
-            const list = fs.readdirSync(dir);
-            list.forEach(file => {
-                const filePath = path.join(dir, file);
-                const stat = fs.statSync(filePath);
-                if (stat && stat.isDirectory()) {
-                    if (!SKIP_DIRS.has(file)) {          // ← saltar carpetas temporales
-                        results = results.concat(getFiles(filePath));
-                    }
-                } else {
-                    // Solo archivos .zip o .txt que NO sean reportes consolidados
-                    if ((file.endsWith('.zip') || file.endsWith('.txt')) &&
-                        !file.startsWith('Reporte_') && !file.startsWith('Master_')) {
-                        results.push(filePath);
-                    }
-                }
-            });
-            return results;
-        };
-
-        const allFiles = getFiles(DOWNLOADS_DIR);
-
-        // ── RFCs del usuario (para fallback de archivos sin solicitudes_sat) ────
-        const [rfcRows] = await pool.query(
-            'SELECT rfc FROM contribuyentes WHERE usuario_id = ?', [req.user.id]
-        );
-        const userRfcs = new Set(rfcRows.map(r => r.rfc.toUpperCase()));
-
-        // ── Mapa pkgId → {tipo, direccion} desde solicitudes_sat ──────────────
-        // Aislamiento: solo paquetes del usuario autenticado
-        // (con fallback para datos históricos sin usuario_id asignado)
+        // ── DB-FIRST: leer desde solicitudes_sat (persiste en Railway) ──────────
+        // paquetes es columna JSON en MySQL — usar JSON_TYPE/JSON_LENGTH para comparaciones seguras
         const [solicitudes] = await pool.query(`
-            SELECT tipo_solicitud, tipo_comprobante, paquetes, rfc, fecha_descarga
+            SELECT rfc, tipo_solicitud, tipo_comprobante, paquetes,
+                   fecha_descarga, id_solicitud, estado_solicitud
             FROM solicitudes_sat
-            WHERE paquetes IS NOT NULL
+            WHERE (
+                    (paquetes IS NOT NULL AND JSON_TYPE(paquetes) = 'ARRAY' AND JSON_LENGTH(paquetes) > 0)
+                    OR CAST(estado_solicitud AS UNSIGNED) = 3
+                  )
               AND (
                 usuario_id = ?
-                OR (usuario_id IS NULL AND rfc IN (
+                OR usuario_id IS NULL
+                OR rfc IN (
                       SELECT rfc FROM contribuyentes WHERE usuario_id = ?
-                    ))
+                    )
               )
+            ORDER BY COALESCE(fecha_descarga, fecha_solicitud) DESC
+            LIMIT 500
         `, [req.user.id, req.user.id]);
-
-        const pkgMap = {};
-        // Whitelist de IDs que pertenecen al usuario actual
-        const userPkgIds = new Set();
-        solicitudes.forEach(sol => {
-            try {
-                const pqs = JSON.parse(sol.paquetes || '[]');
-                pqs.forEach(pid => {
-                    const entry = { tipo: sol.tipo_solicitud, dir: sol.tipo_comprobante };
-                    pkgMap[pid] = entry;
-                    pkgMap[normalizePkgId(pid)] = entry;
-                    userPkgIds.add(pid);
-                    userPkgIds.add(normalizePkgId(pid));
-                });
-            } catch (_) {}
-        });
+        console.log(`[Packages] Usuario ${req.user.id}: ${solicitudes.length} solicitudes, detalle:`,
+            JSON.stringify(solicitudes.slice(0,3).map(s => ({
+                id: s.id_solicitud?.slice(0,8),
+                pkgs: s.paquetes ? JSON.stringify(s.paquetes).slice(0,60) : null,
+                estado: s.estado_solicitud,
+                uid: s.usuario_id
+            }))));
 
         // ── "Procesado" para CFDI: verificar en comprobantes del usuario ──────
         const [cfdiRows] = await pool.query(`
@@ -688,96 +648,91 @@ router.get('/packages', authMiddleware, async (req, res) => {
         `, [req.user.id]);
         const processedCfdiIds = new Set(cfdiRows.map(r => r.metadata_paquete_id));
 
-        // ── "Procesado" para Metadata: si existe un reporte posterior al archivo ─
-        const metaReports = fs.readdirSync(DOWNLOADS_DIR)
-            .filter(f => /^Reporte_Consolidado_Metadata_RyE\d+\.(csv|xlsx)$/i.test(f))
-            .sort();
-        const latestMetaTime = metaReports.length
-            ? fs.statSync(path.join(DOWNLOADS_DIR, metaReports[metaReports.length - 1])).mtime
-            : null;
+        // ── Construir lista de paquetes con verificación de disco ─────────────
+        const seen = new Set(); // evitar duplicados
+        const packages = [];
 
-        // ── Filtrar: paquetes con solicitud registrada O en carpeta del RFC del usuario ─
-        const userFiles = allFiles.filter(filePath => {
-            const pkgId = path.basename(filePath).replace(/\.(zip|txt)$/i, '');
-            if (userPkgIds.has(pkgId) || userPkgIds.has(normalizePkgId(pkgId))) return true;
-            // Fallback: el archivo está dentro de una carpeta cuyo nombre es un RFC del usuario
-            const parentDir = path.basename(path.dirname(filePath)).toUpperCase();
-            return userRfcs.has(parentDir);
-        });
+        for (const sol of solicitudes) {
+            let pkgIds = [];
+            try { pkgIds = JSON.parse(sol.paquetes || '[]'); } catch (_) { continue; }
 
-        const packages = userFiles.map(filePath => {
-            const fileName = path.basename(filePath);
-            const relativePath = path.relative(DOWNLOADS_DIR, filePath);
-            const pkgId = fileName.replace(/\.(zip|txt)$/i, '');
-            const fileStat = fs.statSync(filePath);
-
-            // ── Tipo y dirección (DB primero, extensión como fallback) ────────
-            const dbInfo = pkgMap[pkgId] || pkgMap[normalizePkgId(pkgId)] || {};
-            const type      = dbInfo.tipo || (fileName.endsWith('.txt') ? 'Metadata' : 'CFDI');
-            const direccion = dbInfo.dir === 'Issued'   ? 'Emitido'
-                            : dbInfo.dir === 'Received' ? 'Recibido'
-                            : 'Sin clasificar';
-
-            // ── Estado "Procesado" ────────────────────────────────────────────
-            const isProcessed = type === 'CFDI'
-                ? processedCfdiIds.has(pkgId)
-                : (latestMetaTime != null && fileStat.mtime < latestMetaTime);
-
-            return {
-                name:      fileName,
-                path:      relativePath,
-                type,        // 'Metadata' | 'CFDI'
-                direccion,   // 'Emitido' | 'Recibido' | 'Sin clasificar'
-                processed: isProcessed,
-                size:      (fileStat.size / 1024).toFixed(2) + ' KB',
-                date:      fileStat.mtime
-            };
-        });
-        
-        // ── FIX Railway FS efímero: agregar paquetes descargados (en DB) pero
-        //    cuyo archivo ya no está en disco (borrado por Railway en redeploy).
-        //    Se muestran con missing:true para que el frontend ofrezca Re-descargar.
-        const diskPkgIds = new Set(
-            userFiles.map(fp => path.basename(fp).replace(/\.(zip|txt)$/i, ''))
-        );
-
-        solicitudes.forEach(sol => {
-            if (!sol.fecha_descarga) return; // Solo los que fueron descargados
-            try {
-                JSON.parse(sol.paquetes || '[]').forEach(pid => {
-                    const normPid = normalizePkgId(pid);
-                    if (diskPkgIds.has(pid) || diskPkgIds.has(normPid)) return; // Ya está en disco
-                    const isAlreadyListed = packages.some(p =>
-                        p.name.replace(/\.(zip|txt)$/i, '') === pid ||
-                        normalizePkgId(p.name.replace(/\.(zip|txt)$/i, '')) === normPid
-                    );
-                    if (isAlreadyListed) return;
-
-                    const dbInfo = pkgMap[pid] || pkgMap[normPid] || {};
-                    const type      = dbInfo.tipo || 'CFDI';
-                    const direccion = dbInfo.dir === 'Issued'   ? 'Emitido'
-                                    : dbInfo.dir === 'Received' ? 'Recibido'
+            // Solicitud Terminada pero sin paquetes → mostrar como "pendiente de descarga"
+            if (pkgIds.length === 0 && sol.estado_solicitud == 3) {
+                const solKey = `sol-${sol.id_solicitud}`;
+                if (!seen.has(solKey)) {
+                    seen.add(solKey);
+                    const type      = sol.tipo_solicitud || 'CFDI';
+                    const direccion = sol.tipo_comprobante === 'Issued'   ? 'Emitido'
+                                    : sol.tipo_comprobante === 'Received' ? 'Recibido'
                                     : 'Sin clasificar';
-                    const isProcessed = type === 'CFDI' ? processedCfdiIds.has(pid) : false;
-
                     packages.push({
-                        name:      pid + '.zip',
-                        path:      pid + '.zip',
+                        name:           `${sol.id_solicitud}.zip`,
+                        pkgId:          sol.id_solicitud,
+                        solicitudId:    sol.id_solicitud,
+                        rfc:            (sol.rfc || '').toUpperCase(),
                         type,
                         direccion,
-                        processed: isProcessed,
-                        size:      '—',
-                        date:      sol.fecha_descarga,
-                        missing:   true,   // archivo no está en disco (Railway lo borró)
-                        rfc:       sol.rfc || null
+                        processed:      false,
+                        file_available: false,
+                        needs_download: true,  // solicitud lista pero sin paquetes conocidos
+                        size:           'N/A',
+                        date:           sol.fecha_descarga || new Date(),
                     });
+                }
+                continue;
+            }
+
+            for (const pid of pkgIds) {
+                const normId = normalizePkgId(pid);
+                if (seen.has(normId)) continue;
+                seen.add(normId);
+
+                const type      = sol.tipo_solicitud || 'CFDI';
+                const direccion = sol.tipo_comprobante === 'Issued'   ? 'Emitido'
+                                : sol.tipo_comprobante === 'Received' ? 'Recibido'
+                                : 'Sin clasificar';
+
+                // Verificar si el archivo existe en disco (efímero en Railway)
+                const rfcUpper = (sol.rfc || '').toUpperCase();
+                const fileName = `${pid}.zip`;
+                const possiblePaths = [
+                    path.join(DOWNLOADS_DIR, rfcUpper, fileName),
+                    path.join(DOWNLOADS_DIR, fileName),
+                    path.join(DOWNLOADS_DIR, rfcUpper, `${normId}.zip`),
+                    path.join(DOWNLOADS_DIR, `${normId}.zip`),
+                ];
+                let filePath = null;
+                let fileStat = null;
+                for (const p of possiblePaths) {
+                    try {
+                        const st = fs.statSync(p);
+                        if (st.size > 100) { filePath = p; fileStat = st; break; }
+                    } catch (_) { /* no existe */ }
+                }
+
+                const fileAvailable = filePath !== null;
+                const isProcessed   = type === 'CFDI'
+                    ? (processedCfdiIds.has(pid) || processedCfdiIds.has(normId))
+                    : false;
+
+                packages.push({
+                    name:          fileName,
+                    pkgId:         pid,
+                    path:          filePath ? path.relative(DOWNLOADS_DIR, filePath) : null,
+                    rfc:           rfcUpper,
+                    type,
+                    direccion,
+                    processed:     isProcessed,
+                    file_available: fileAvailable,
+                    size:          fileStat ? (fileStat.size / 1024).toFixed(2) + ' KB' : 'N/A',
+                    date:          fileStat ? fileStat.mtime : (sol.fecha_descarga || new Date()),
                 });
-            } catch (_) {}
-        });
+            }
+        }
 
         // Sort by date desc
         packages.sort((a, b) => new Date(b.date) - new Date(a.date));
-
+        console.log(`[Packages] Respuesta final: ${packages.length} paquetes para usuario ${req.user.id}`);
         res.json(packages);
     } catch (e) {
         console.error("List Packages Error:", e);

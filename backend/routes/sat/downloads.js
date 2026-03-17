@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const AdmZip = require('adm-zip');
 const pool = require('../../db');
-const { runSatScript, getPaths } = require('../../utils/satHelpers');
+const { runSatScript, getPaths, cleanTempPaths } = require('../../utils/satHelpers');
 const { authMiddleware } = require('../../middleware/auth');
 
 const DOWNLOADS_BASE = process.env.DOWNLOAD_DIR
@@ -35,12 +35,13 @@ function findZipLocally(pkgId, baseDir) {
 
 // 4. Download
 router.post('/download', async (req, res) => {
+    const { rfc, password, id, force } = req.body;
+    console.log(`[DEBUG] Descargando solicitud/paquete: ${id} para RFC: ${rfc}`);
+
+    const paths = getPaths(rfc);
+    if (!paths) return res.status(400).json({ error: `Certificados no encontrados para el RFC: ${rfc}` });
+
     try {
-        const { rfc, password, id, force } = req.body;
-        console.log(`[DEBUG] Descargando solicitud/paquete: ${id} para RFC: ${rfc}`);
-        
-        const paths = getPaths(rfc);
-        if (!paths) return res.status(400).json({ error: `Certificados no encontrados para el RFC: ${rfc}` });
 
         // 1. First, check if 'id' is a Request ID that has packages.
         // We do this by trying to verify it first, or checking the DB.
@@ -225,6 +226,8 @@ router.post('/download', async (req, res) => {
         }
 
         res.status(500).json({ error: error.message || "Error al descargar paquete del SAT" });
+    } finally {
+        cleanTempPaths(paths);
     }
 });
 
