@@ -199,6 +199,40 @@ app.get('/', (req, res) => {
 });
 
 // =====================================================
+// SETUP ADMIN — endpoint TEMPORAL para crear usuario admin
+// Úsalo UNA VEZ desde el navegador, luego se desactiva
+// URL: /api/setup-admin?key=etaxes2026setup
+// =====================================================
+app.get('/api/setup-admin', async (req, res) => {
+  const SECRET_KEY = 'etaxes2026setup';
+  if (req.query.key !== SECRET_KEY) {
+    return res.status(403).json({ error: 'Clave incorrecta.' });
+  }
+  try {
+    const bcrypt = require('bcryptjs');
+    // Verificar si ya existe un admin
+    const [rows] = await pool.query("SELECT id FROM usuarios WHERE username = 'admin' LIMIT 1");
+    if (rows.length > 0) {
+      return res.json({ ok: false, message: 'El usuario admin ya existe. No se necesita hacer nada.' });
+    }
+    const hash = await bcrypt.hash('admin123', 10);
+    await pool.query(
+      "INSERT INTO usuarios (username, password_hash, role) VALUES (?, ?, ?)",
+      ['admin', hash, 'admin']
+    );
+    return res.json({
+      ok: true,
+      message: '✅ Usuario admin creado exitosamente.',
+      username: 'admin',
+      password: 'admin123',
+      warning: '⚠️ Cambia la contraseña desde el panel de administración.',
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+// =====================================================
 // INICIO DEL SERVIDOR — guarda referencia para shutdown
 // =====================================================
 const server = app.listen(PORT, () => {
