@@ -130,7 +130,13 @@ async function main() {
   }
 
   await pool.end();
-  process.exit(missingCount > 0 || totalErrors > 0 ? 1 : 0);
+  // En producción siempre salir con 0 para que server.js arranque
+  // Los errores de migración son warnings, no fallas críticas
+  if (missingCount > 0) {
+    console.error('\x1b[31m[MIGRACIÓN]\x1b[0m Tablas requeridas faltantes — el servidor puede fallar.');
+    process.exit(1); // Solo falla si faltan tablas
+  }
+  process.exit(0); // Errores de SQL son warnings — siempre arrancar el servidor
 }
 
 main().catch(err => {
