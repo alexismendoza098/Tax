@@ -100,7 +100,7 @@ const runSatPythonScript = (argsArray, timeout = 300000) => {
   return new Promise((resolve, reject) => {
     const options = {
       mode:       'text',
-      pythonPath: 'python',
+      pythonPath: process.platform === 'win32' ? 'python' : 'python3',
       scriptPath: path.join(__dirname, '..'),
       args:       argsArray,
       timeout,
