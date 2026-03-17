@@ -2588,20 +2588,13 @@ function renderCalculation(data) {
 // ADMIN: USER MANAGEMENT
 // =====================================================
 function updateAdminUI() {
-    const navAdmin          = document.getElementById('nav-admin');
-    const navFiscal         = document.getElementById('nav-fiscal');
-    const navEstadosCuenta  = document.getElementById('nav-estados-cuenta');
-    const navAuditoria      = document.getElementById('nav-auditoria');
-    const navContribuyentes = document.getElementById('nav-contribuyentes');
-    const isLoggedIn = currentUser && (currentUser.role === 'admin' || currentUser.role === 'user');
-    const isAdmin    = currentUser && currentUser.role === 'admin';
+    const navAdmin     = document.getElementById('nav-admin');
+    const navAuditoria = document.getElementById('nav-auditoria');
+    const isLoggedIn   = currentUser && (currentUser.role === 'admin' || currentUser.role === 'user');
+    const isAdmin      = currentUser && currentUser.role === 'admin';
 
-    // Auditoría: visible para todos los usuarios autenticados
+    // Auditoría: visible solo cuando el usuario está autenticado
     if (navAuditoria) navAuditoria.style.display = isLoggedIn ? 'block' : 'none';
-
-    // Módulos avanzados (Fiscal, Conciliación, Mis RFCs): ocultos del nav principal
-    // Mis RFCs se accede desde el tab en Panel 2 (Adquisición)
-    [navFiscal, navEstadosCuenta, navContribuyentes].forEach(n => { if(n) n.style.display = 'none'; });
 
     // Seccion Clientes/Usuarios: SOLO visible para administradores
     if (navAdmin) navAdmin.style.display = isAdmin ? 'block' : 'none';
