@@ -5,6 +5,9 @@
 -- El pool de conexión ya apunta a la DB correcta via env vars
 -- =====================================================
 
+-- Desactivar FK checks para permitir creación de tablas en cualquier orden
+SET foreign_key_checks = 0;
+
 -- 1. Usuarios
 CREATE TABLE IF NOT EXISTS usuarios (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -210,3 +213,6 @@ CREATE INDEX idx_comprobantes_rfc_receptor ON comprobantes(rfc_receptor);
 CREATE INDEX idx_conceptos_uuid ON conceptos(uuid);
 CREATE INDEX idx_pagos_uuid ON pagos(uuid);
 CREATE INDEX idx_pagos_fecha ON pagos(fecha_pago);
+
+-- Reactivar FK checks
+SET foreign_key_checks = 1;

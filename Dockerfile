@@ -26,4 +26,4 @@ EXPOSE 3000
 # Arrancar desde la carpeta del backend
 # 1º corre migraciones (crea tablas si no existen) → 2º inicia servidor
 WORKDIR /app/backend
-CMD ["sh", "-c", "node scripts/migrate.js && node server.js"]
+CMD ["sh", "-c", "node scripts/migrate.js; node server.js"]
