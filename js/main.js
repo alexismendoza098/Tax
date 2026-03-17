@@ -1729,7 +1729,12 @@ window.downloadGroup = async (gid) => {
         }
 
         loadDownloadHistory();
-        alert(`Se iniciaron ${count} descargas. Revisa el progreso en unos momentos.`);
+        if (count > 0) {
+            showStep(3); // navega a Paso 3 y refresca la lista de paquetes
+            showToast('success', `${count} descarga(s) completada(s)`, 'Los paquetes están listos en el Paso 3.');
+        } else {
+            showToast('error', 'Sin descargas', 'No se pudo completar ninguna descarga.');
+        }
     }
 };
 
@@ -2061,7 +2066,8 @@ async function loadFlattenPackages() {
             listContainer.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-box-open"></i>
-                    <p>No se encontraron paquetes en el servidor</p>
+                    <p>No hay paquetes descargados</p>
+                    <small style="color:#9ca3af">Ve al Paso 2, verifica tus solicitudes y descarga los paquetes disponibles.</small>
                 </div>
             `;
             return;
@@ -2162,25 +2168,39 @@ function _renderPackageGroups(packages, container) {
 
         const body = document.getElementById(`pkgsec-${grupo.key}`);
         pkgs.forEach(pkg => {
-            const pkgId = pkg.name.replace(/\.(zip|txt)$/i, '');
-            const isSelected = selectedPackages.has(pkgId);
+            const pkgId = pkg.pkgId || pkg.name.replace(/\.(zip|txt)$/i, '');
+            const fileOk = pkg.file_available !== false; // undefined = legacy (asume ok)
+            const isSelected = fileOk && selectedPackages.has(pkgId);
             const statusBadge = pkg.processed
                 ? '<span class="badge bg-success" style="font-size:0.7em">Procesado</span>'
-                : '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>';
+                : fileOk
+                    ? '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>'
+                    : '<span class="badge bg-warning text-dark" style="font-size:0.7em">⚠ Sin archivo</span>';
+
             const card = document.createElement('div');
-            card.className = `package-card ${isSelected ? 'selected' : ''}`;
+            card.className = `package-card ${isSelected ? 'selected' : ''} ${!fileOk ? 'pkg-unavailable' : ''}`;
             card.dataset.pkgid = pkgId;
             card.dataset.group = grupo.key;
-            card.dataset.type = (pkg.type || 'CFDI').toLowerCase(); // 'metadata' | 'cfdi'
-            card.onclick = () => toggleSelectPackage(pkgId, card);
+            card.dataset.type = (pkg.type || 'CFDI').toLowerCase();
+            // Solo seleccionable si el archivo está disponible en disco
+            if (fileOk) card.onclick = () => toggleSelectPackage(pkgId, card);
+
+            const redownloadBtn = !fileOk
+                ? `<button class="btn btn-xs btn-outline-warning ms-1" style="font-size:0.7em;padding:2px 6px"
+                     title="El archivo ZIP se perdió al reiniciar Railway. Vuelve a descargarlo desde Mis Solicitudes."
+                     onclick="event.stopPropagation();showStep(2);showToast('info','Re-descargar','Ve a Mis Solicitudes y descarga este paquete de nuevo.')">
+                     <i class="fas fa-redo"></i> Re-descargar
+                   </button>`
+                : '';
+
             card.innerHTML = `
-                <div class="pkg-icon"><i class="fas ${grupo.icon}" style="color:${grupo.color}"></i></div>
+                <div class="pkg-icon"><i class="fas ${grupo.icon}" style="color:${fileOk ? grupo.color : '#9ca3af'}"></i></div>
                 <div class="pkg-info">
-                    <div class="pkg-name">${pkg.name}</div>
+                    <div class="pkg-name" style="color:${fileOk ? '' : '#9ca3af'}">${pkg.name}</div>
                     <div class="pkg-meta">${pkg.size} · ${new Date(pkg.date).toLocaleDateString()}</div>
                 </div>
-                ${statusBadge}
-                <div class="pkg-check"><i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'}"></i></div>
+                ${statusBadge}${redownloadBtn}
+                ${fileOk ? `<div class="pkg-check"><i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'}"></i></div>` : ''}
             `;
             body.appendChild(card);
         });

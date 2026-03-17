@@ -611,65 +611,20 @@ router.get('/preview/:packageId', authMiddleware, async (req, res) => {
 
 router.get('/packages', authMiddleware, async (req, res) => {
     try {
-        if (!fs.existsSync(DOWNLOADS_DIR)) {
-            return res.json([]);
-        }
-        
-        // Helper to get files recursively
-        // Excluye "temp_extract" y "temp_flatten" — son directorios temporales de 1a.py
-        const SKIP_DIRS = new Set(['temp_extract', 'temp_flatten']);
-        const getFiles = (dir) => {
-            let results = [];
-            const list = fs.readdirSync(dir);
-            list.forEach(file => {
-                const filePath = path.join(dir, file);
-                const stat = fs.statSync(filePath);
-                if (stat && stat.isDirectory()) {
-                    if (!SKIP_DIRS.has(file)) {          // ← saltar carpetas temporales
-                        results = results.concat(getFiles(filePath));
-                    }
-                } else {
-                    // Solo archivos .zip o .txt que NO sean reportes consolidados
-                    if ((file.endsWith('.zip') || file.endsWith('.txt')) &&
-                        !file.startsWith('Reporte_') && !file.startsWith('Master_')) {
-                        results.push(filePath);
-                    }
-                }
-            });
-            return results;
-        };
-
-        const allFiles = getFiles(DOWNLOADS_DIR);
-
-        // ── Mapa pkgId → {tipo, direccion} desde solicitudes_sat ──────────────
+        // ── DB-FIRST: leer paquetes desde solicitudes_sat (persiste en Railway) ─
         // Aislamiento: solo paquetes del usuario autenticado
-        // (con fallback para datos históricos sin usuario_id asignado)
         const [solicitudes] = await pool.query(`
-            SELECT tipo_solicitud, tipo_comprobante, paquetes
+            SELECT rfc, tipo_solicitud, tipo_comprobante, paquetes, fecha_descarga
             FROM solicitudes_sat
-            WHERE paquetes IS NOT NULL
+            WHERE paquetes IS NOT NULL AND paquetes != '[]' AND paquetes != 'null'
               AND (
                 usuario_id = ?
                 OR (usuario_id IS NULL AND rfc IN (
                       SELECT rfc FROM contribuyentes WHERE usuario_id = ?
                     ))
               )
+            ORDER BY fecha_descarga DESC
         `, [req.user.id, req.user.id]);
-
-        const pkgMap = {};
-        // Whitelist de IDs que pertenecen al usuario actual
-        const userPkgIds = new Set();
-        solicitudes.forEach(sol => {
-            try {
-                JSON.parse(sol.paquetes || '[]').forEach(pid => {
-                    const entry = { tipo: sol.tipo_solicitud, dir: sol.tipo_comprobante };
-                    pkgMap[pid] = entry;
-                    pkgMap[normalizePkgId(pid)] = entry; // lookup flexible (sin _01, sin extensión)
-                    userPkgIds.add(pid);
-                    userPkgIds.add(normalizePkgId(pid));
-                });
-            } catch (_) {}
-        });
 
         // ── "Procesado" para CFDI: verificar en comprobantes del usuario ──────
         const [cfdiRows] = await pool.query(`
@@ -680,52 +635,64 @@ router.get('/packages', authMiddleware, async (req, res) => {
         `, [req.user.id]);
         const processedCfdiIds = new Set(cfdiRows.map(r => r.metadata_paquete_id));
 
-        // ── "Procesado" para Metadata: si existe un reporte posterior al archivo ─
-        const metaReports = fs.readdirSync(DOWNLOADS_DIR)
-            .filter(f => /^Reporte_Consolidado_Metadata_RyE\d+\.(csv|xlsx)$/i.test(f))
-            .sort();
-        const latestMetaTime = metaReports.length
-            ? fs.statSync(path.join(DOWNLOADS_DIR, metaReports[metaReports.length - 1])).mtime
-            : null;
+        // ── Construir lista de paquetes con verificación de disco ─────────────
+        const seen = new Set(); // evitar duplicados
+        const packages = [];
 
-        // Filtrar allFiles a solo los paquetes que pertenecen al usuario
-        const userFiles = allFiles.filter(filePath => {
-            const pkgId = path.basename(filePath).replace(/\.(zip|txt)$/i, '');
-            return userPkgIds.has(pkgId) || userPkgIds.has(normalizePkgId(pkgId));
-        });
+        for (const sol of solicitudes) {
+            let pkgIds = [];
+            try { pkgIds = JSON.parse(sol.paquetes || '[]'); } catch (_) { continue; }
 
-        const packages = userFiles.map(filePath => {
-            const fileName = path.basename(filePath);
-            const relativePath = path.relative(DOWNLOADS_DIR, filePath);
-            const pkgId = fileName.replace(/\.(zip|txt)$/i, '');
-            const fileStat = fs.statSync(filePath);
+            for (const pid of pkgIds) {
+                const normId = normalizePkgId(pid);
+                if (seen.has(normId)) continue;
+                seen.add(normId);
 
-            // ── Tipo y dirección (DB primero, extensión como fallback) ────────
-            const dbInfo = pkgMap[pkgId] || pkgMap[normalizePkgId(pkgId)] || {};
-            const type      = dbInfo.tipo || (fileName.endsWith('.txt') ? 'Metadata' : 'CFDI');
-            const direccion = dbInfo.dir === 'Issued'   ? 'Emitido'
-                            : dbInfo.dir === 'Received' ? 'Recibido'
-                            : 'Sin clasificar';
+                const type      = sol.tipo_solicitud || 'CFDI';
+                const direccion = sol.tipo_comprobante === 'Issued'   ? 'Emitido'
+                                : sol.tipo_comprobante === 'Received' ? 'Recibido'
+                                : 'Sin clasificar';
 
-            // ── Estado "Procesado" ────────────────────────────────────────────
-            const isProcessed = type === 'CFDI'
-                ? processedCfdiIds.has(pkgId)
-                : (latestMetaTime != null && fileStat.mtime < latestMetaTime);
+                // Verificar si el archivo existe en disco (efímero en Railway)
+                const rfcUpper = (sol.rfc || '').toUpperCase();
+                const fileName = `${pid}.zip`;
+                const possiblePaths = [
+                    path.join(DOWNLOADS_DIR, rfcUpper, fileName),
+                    path.join(DOWNLOADS_DIR, fileName),
+                    path.join(DOWNLOADS_DIR, rfcUpper, `${normId}.zip`),
+                    path.join(DOWNLOADS_DIR, `${normId}.zip`),
+                ];
+                let filePath = null;
+                let fileStat = null;
+                for (const p of possiblePaths) {
+                    try {
+                        const st = fs.statSync(p);
+                        if (st.size > 100) { filePath = p; fileStat = st; break; }
+                    } catch (_) { /* no existe */ }
+                }
 
-            return {
-                name:      fileName,
-                path:      relativePath,
-                type,        // 'Metadata' | 'CFDI'
-                direccion,   // 'Emitido' | 'Recibido' | 'Sin clasificar'
-                processed: isProcessed,
-                size:      (fileStat.size / 1024).toFixed(2) + ' KB',
-                date:      fileStat.mtime
-            };
-        });
-        
+                const fileAvailable = filePath !== null;
+                const isProcessed   = type === 'CFDI'
+                    ? (processedCfdiIds.has(pid) || processedCfdiIds.has(normId))
+                    : false; // Metadata: marcar al procesar
+
+                packages.push({
+                    name:          fileName,
+                    pkgId:         pid,
+                    path:          filePath ? path.relative(DOWNLOADS_DIR, filePath) : null,
+                    rfc:           rfcUpper,
+                    type,
+                    direccion,
+                    processed:     isProcessed,
+                    file_available: fileAvailable,
+                    size:          fileStat ? (fileStat.size / 1024).toFixed(2) + ' KB' : 'N/A',
+                    date:          fileStat ? fileStat.mtime : (sol.fecha_descarga || new Date()),
+                });
+            }
+        }
+
         // Sort by date desc
         packages.sort((a, b) => new Date(b.date) - new Date(a.date));
-            
         res.json(packages);
     } catch (e) {
         console.error("List Packages Error:", e);

@@ -1496,6 +1496,16 @@ main {
     background: rgba(52, 152, 219, 0.1);
 }
 
+.package-card.pkg-unavailable {
+    opacity: 0.6;
+    border-color: rgba(251, 191, 36, 0.3);
+    cursor: default;
+}
+.package-card.pkg-unavailable:hover {
+    background: transparent;
+    transform: none;
+}
+
 .pkg-icon {
     width: 40px;
     height: 40px;
