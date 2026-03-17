@@ -203,6 +203,8 @@ CREATE TABLE IF NOT EXISTS solicitudes_sat (
   codigo_estado_solicitud VARCHAR(50),
   mensaje TEXT,
   paquetes JSON,
+  usuario_id INT NULL,
+  group_id VARCHAR(36) NULL,
   fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   fecha_descarga DATETIME DEFAULT NULL
 ) ENGINE=InnoDB;

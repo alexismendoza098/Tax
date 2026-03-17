@@ -211,11 +211,13 @@ app.get('/api/setup-admin', async (req, res) => {
   try {
     const bcrypt = require('bcryptjs');
 
-    // Agregar columnas faltantes a usuarios (ignorar si ya existen — ER_DUP_FIELDNAME=1060)
+    // Agregar columnas faltantes (ignorar si ya existen — ER_DUP_FIELDNAME=1060)
     const alterCols = [
       "ALTER TABLE usuarios ADD COLUMN rfc VARCHAR(13) NULL AFTER username",
       "ALTER TABLE usuarios ADD COLUMN nombre VARCHAR(200) NULL AFTER rfc",
       "ALTER TABLE usuarios ADD COLUMN email VARCHAR(200) NULL AFTER nombre",
+      "ALTER TABLE solicitudes_sat ADD COLUMN usuario_id INT NULL",
+      "ALTER TABLE solicitudes_sat ADD COLUMN group_id VARCHAR(36) NULL",
     ];
     for (const sql of alterCols) {
       try { await pool.query(sql); } catch (e) { /* columna ya existe — OK */ }
