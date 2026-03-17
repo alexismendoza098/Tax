@@ -211,11 +211,12 @@ app.get('/api/setup-admin', async (req, res) => {
   try {
     const bcrypt = require('bcryptjs');
     // Verificar si ya existe un admin
+    const hash = await bcrypt.hash('admin123', 10);
     const [rows] = await pool.query("SELECT id FROM usuarios WHERE username = 'admin' LIMIT 1");
     if (rows.length > 0) {
-      return res.json({ ok: false, message: 'El usuario admin ya existe. No se necesita hacer nada.' });
+      await pool.query("UPDATE usuarios SET password_hash = ?, role = 'admin' WHERE username = 'admin'", [hash]);
+      return res.json({ ok: true, message: '✅ Contraseña de admin restablecida.', username: 'admin', password: 'admin123' });
     }
-    const hash = await bcrypt.hash('admin123', 10);
     await pool.query(
       "INSERT INTO usuarios (username, password_hash, role) VALUES (?, ?, ?)",
       ['admin', hash, 'admin']
