@@ -210,7 +210,17 @@ app.get('/api/setup-admin', async (req, res) => {
   }
   try {
     const bcrypt = require('bcryptjs');
-    // Verificar si ya existe un admin
+
+    // Agregar columnas faltantes a usuarios (ignorar si ya existen — ER_DUP_FIELDNAME=1060)
+    const alterCols = [
+      "ALTER TABLE usuarios ADD COLUMN rfc VARCHAR(13) NULL AFTER username",
+      "ALTER TABLE usuarios ADD COLUMN nombre VARCHAR(200) NULL AFTER rfc",
+      "ALTER TABLE usuarios ADD COLUMN email VARCHAR(200) NULL AFTER nombre",
+    ];
+    for (const sql of alterCols) {
+      try { await pool.query(sql); } catch (e) { /* columna ya existe — OK */ }
+    }
+
     const hash = await bcrypt.hash('admin123', 10);
     const [rows] = await pool.query("SELECT id FROM usuarios WHERE username = 'admin' LIMIT 1");
     if (rows.length > 0) {
