@@ -87,14 +87,27 @@ router.post('/download', async (req, res) => {
             console.warn("[WARN] Verify failed before download, trying direct download as package ID:", verifyError.message);
             // Fallback: Assume 'id' IS the package ID (rare but possible)
             packageIds = [id];
+            // Guardar en DB para que el Paso 3 pueda encontrar el archivo
+            try {
+                await pool.query(`
+                    UPDATE solicitudes_sat
+                    SET paquetes = COALESCE(NULLIF(paquetes,'[]'), ?)
+                    WHERE id_solicitud = ? AND (paquetes IS NULL OR paquetes = '[]')
+                `, [JSON.stringify(packageIds), id]);
+            } catch (_) { /* no crítico */ }
         }
 
         if (packageIds.length === 0) {
-             // If verify didn't return packages, maybe the ID passed IS the package ID?
-             // Or maybe status is not finished.
-             // Let's try to treat 'id' as a package ID directly if verify failed to find list.
              console.log(`[DEBUG] No se encontraron paquetes vía Verify. Intentando usar ID ${id} como ID de paquete directo.`);
              packageIds = [id];
+             // Igual persistir en DB
+             try {
+                 await pool.query(`
+                     UPDATE solicitudes_sat
+                     SET paquetes = COALESCE(NULLIF(paquetes,'[]'), ?)
+                     WHERE id_solicitud = ? AND (paquetes IS NULL OR paquetes = '[]')
+                 `, [JSON.stringify(packageIds), id]);
+             } catch (_) { /* no crítico */ }
         }
 
         console.log(`[DEBUG] Paquetes a descargar:`, packageIds);
@@ -167,9 +180,17 @@ router.post('/download', async (req, res) => {
         // Return summary. If only 1 package, return like before for compatibility.
         if (results.length === 1 && results[0].status === 'success') {
              res.json(results[0]);
+        } else if (successCount === 0) {
+            // TODOS fallaron → HTTP 422 para que el frontend lo detecte como error real
+            const firstErr = results[0]?.error || results[0]?.mensaje || 'Sin detalles del SAT';
+            return res.status(422).json({
+                status: 'error',
+                message: `Ningún paquete pudo descargarse. ${firstErr}`,
+                results: results
+            });
         } else {
-             res.json({ 
-                 status: successCount > 0 ? 'success' : 'partial_error',
+             res.json({
+                 status: 'partial_success',
                  message: `Descargados ${successCount} de ${packageIds.length} paquetes`,
                  results: results
              });

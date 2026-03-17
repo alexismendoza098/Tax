@@ -611,8 +611,9 @@ router.get('/preview/:packageId', authMiddleware, async (req, res) => {
 
 router.get('/packages', authMiddleware, async (req, res) => {
     try {
+        // Asegurar que el directorio exista (no crashear si no existe en Railway)
         if (!fs.existsSync(DOWNLOADS_DIR)) {
-            return res.json([]);
+            try { fs.mkdirSync(DOWNLOADS_DIR, { recursive: true }); } catch (_) {}
         }
         
         // Helper to get files recursively
@@ -641,11 +642,17 @@ router.get('/packages', authMiddleware, async (req, res) => {
 
         const allFiles = getFiles(DOWNLOADS_DIR);
 
+        // ── RFCs del usuario (para fallback de archivos sin solicitudes_sat) ────
+        const [rfcRows] = await pool.query(
+            'SELECT rfc FROM contribuyentes WHERE usuario_id = ?', [req.user.id]
+        );
+        const userRfcs = new Set(rfcRows.map(r => r.rfc.toUpperCase()));
+
         // ── Mapa pkgId → {tipo, direccion} desde solicitudes_sat ──────────────
         // Aislamiento: solo paquetes del usuario autenticado
         // (con fallback para datos históricos sin usuario_id asignado)
         const [solicitudes] = await pool.query(`
-            SELECT tipo_solicitud, tipo_comprobante, paquetes
+            SELECT tipo_solicitud, tipo_comprobante, paquetes, rfc, fecha_descarga
             FROM solicitudes_sat
             WHERE paquetes IS NOT NULL
               AND (
@@ -661,10 +668,11 @@ router.get('/packages', authMiddleware, async (req, res) => {
         const userPkgIds = new Set();
         solicitudes.forEach(sol => {
             try {
-                JSON.parse(sol.paquetes || '[]').forEach(pid => {
+                const pqs = JSON.parse(sol.paquetes || '[]');
+                pqs.forEach(pid => {
                     const entry = { tipo: sol.tipo_solicitud, dir: sol.tipo_comprobante };
                     pkgMap[pid] = entry;
-                    pkgMap[normalizePkgId(pid)] = entry; // lookup flexible (sin _01, sin extensión)
+                    pkgMap[normalizePkgId(pid)] = entry;
                     userPkgIds.add(pid);
                     userPkgIds.add(normalizePkgId(pid));
                 });
@@ -688,10 +696,13 @@ router.get('/packages', authMiddleware, async (req, res) => {
             ? fs.statSync(path.join(DOWNLOADS_DIR, metaReports[metaReports.length - 1])).mtime
             : null;
 
-        // Filtrar allFiles a solo los paquetes que pertenecen al usuario
+        // ── Filtrar: paquetes con solicitud registrada O en carpeta del RFC del usuario ─
         const userFiles = allFiles.filter(filePath => {
             const pkgId = path.basename(filePath).replace(/\.(zip|txt)$/i, '');
-            return userPkgIds.has(pkgId) || userPkgIds.has(normalizePkgId(pkgId));
+            if (userPkgIds.has(pkgId) || userPkgIds.has(normalizePkgId(pkgId))) return true;
+            // Fallback: el archivo está dentro de una carpeta cuyo nombre es un RFC del usuario
+            const parentDir = path.basename(path.dirname(filePath)).toUpperCase();
+            return userRfcs.has(parentDir);
         });
 
         const packages = userFiles.map(filePath => {
@@ -723,9 +734,50 @@ router.get('/packages', authMiddleware, async (req, res) => {
             };
         });
         
+        // ── FIX Railway FS efímero: agregar paquetes descargados (en DB) pero
+        //    cuyo archivo ya no está en disco (borrado por Railway en redeploy).
+        //    Se muestran con missing:true para que el frontend ofrezca Re-descargar.
+        const diskPkgIds = new Set(
+            userFiles.map(fp => path.basename(fp).replace(/\.(zip|txt)$/i, ''))
+        );
+
+        solicitudes.forEach(sol => {
+            if (!sol.fecha_descarga) return; // Solo los que fueron descargados
+            try {
+                JSON.parse(sol.paquetes || '[]').forEach(pid => {
+                    const normPid = normalizePkgId(pid);
+                    if (diskPkgIds.has(pid) || diskPkgIds.has(normPid)) return; // Ya está en disco
+                    const isAlreadyListed = packages.some(p =>
+                        p.name.replace(/\.(zip|txt)$/i, '') === pid ||
+                        normalizePkgId(p.name.replace(/\.(zip|txt)$/i, '')) === normPid
+                    );
+                    if (isAlreadyListed) return;
+
+                    const dbInfo = pkgMap[pid] || pkgMap[normPid] || {};
+                    const type      = dbInfo.tipo || 'CFDI';
+                    const direccion = dbInfo.dir === 'Issued'   ? 'Emitido'
+                                    : dbInfo.dir === 'Received' ? 'Recibido'
+                                    : 'Sin clasificar';
+                    const isProcessed = type === 'CFDI' ? processedCfdiIds.has(pid) : false;
+
+                    packages.push({
+                        name:      pid + '.zip',
+                        path:      pid + '.zip',
+                        type,
+                        direccion,
+                        processed: isProcessed,
+                        size:      '—',
+                        date:      sol.fecha_descarga,
+                        missing:   true,   // archivo no está en disco (Railway lo borró)
+                        rfc:       sol.rfc || null
+                    });
+                });
+            } catch (_) {}
+        });
+
         // Sort by date desc
         packages.sort((a, b) => new Date(b.date) - new Date(a.date));
-            
+
         res.json(packages);
     } catch (e) {
         console.error("List Packages Error:", e);

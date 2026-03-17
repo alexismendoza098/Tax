@@ -1496,6 +1496,18 @@ main {
     background: rgba(52, 152, 219, 0.1);
 }
 
+/* Paquete cuyo archivo fue borrado por Railway FS efímero */
+.package-card.pkg-missing {
+    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.07);
+    cursor: default;
+    opacity: 0.85;
+}
+.package-card.pkg-missing:hover {
+    transform: none;
+    border-color: #f59e0b;
+}
+
 .pkg-icon {
     width: 40px;
     height: 40px;

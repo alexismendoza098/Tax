@@ -1819,11 +1819,30 @@ async function downloadRequest(id, options = {}) {
         const data = await res.json();
 
         if (res.ok) {
+            // Detectar fallo real aunque HTTP sea 200 (backend devuelve partial_error)
+            const allFailed = data.results && data.results.length > 0 && data.results.every(r => r.status === 'error');
+            const singleFailed = data.status === 'error' || data.error;
+
             if (!options.silent) {
-                alert('Descarga iniciada/completada. Los paquetes aparecerán en el Paso 3.');
-                loadDownloadHistory();
+                if (allFailed || singleFailed) {
+                    const errMsg = (data.results && data.results[0]?.error) || data.error || 'La descarga falló en el servidor.';
+                    showToast('error', 'Error en la descarga ❌', errMsg, 8000);
+                } else {
+                    const parcial = data.status === 'partial_success';
+                    showToast('success',
+                        parcial ? 'Descarga parcial ⚠️' : 'Descarga completada ✅',
+                        parcial ? `${data.message} — yendo al Paso 3` : 'Paquetes disponibles — yendo al Paso 3.',
+                        5000);
+                    loadDownloadHistory();
+                    // Navegar automáticamente al Paso 3 y recargar lista de paquetes
+                    if (typeof selectStep === 'function') selectStep(3);
+                    else if (typeof loadFlattenPackages === 'function') loadFlattenPackages();
+                }
+            } else {
+                // En modo silencioso, igual refrescar Paso 3
+                if (typeof loadFlattenPackages === 'function') loadFlattenPackages();
             }
-            return true;
+            return !(allFailed || singleFailed);
         } else {
             if (!options.silent) alert('Error: ' + (data.error || 'Error en la descarga'));
             throw new Error(data.error);
@@ -2147,23 +2166,41 @@ function _renderPackageGroups(packages, container) {
         pkgs.forEach(pkg => {
             const pkgId = pkg.name.replace(/\.(zip|txt)$/i, '');
             const isSelected = selectedPackages.has(pkgId);
-            const statusBadge = pkg.processed
-                ? '<span class="badge bg-success" style="font-size:0.7em">Procesado</span>'
-                : '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>';
+            const isMissing  = !!pkg.missing; // archivo en DB pero borrado por Railway FS
+
+            const statusBadge = isMissing
+                ? '<span class="badge bg-warning text-dark" style="font-size:0.7em"><i class="fas fa-exclamation-triangle"></i> Archivo perdido</span>'
+                : pkg.processed
+                    ? '<span class="badge bg-success" style="font-size:0.7em">Procesado</span>'
+                    : '<span class="badge bg-secondary" style="font-size:0.7em">Nuevo</span>';
+
             const card = document.createElement('div');
-            card.className = `package-card ${isSelected ? 'selected' : ''}`;
+            card.className = `package-card ${isSelected ? 'selected' : ''} ${isMissing ? 'pkg-missing' : ''}`;
             card.dataset.pkgid = pkgId;
             card.dataset.group = grupo.key;
-            card.dataset.type = (pkg.type || 'CFDI').toLowerCase(); // 'metadata' | 'cfdi'
-            card.onclick = () => toggleSelectPackage(pkgId, card);
+            card.dataset.type = (pkg.type || 'CFDI').toLowerCase();
+            // Si está missing, no seleccionar; mostrar botón Re-descargar
+            if (!isMissing) card.onclick = () => toggleSelectPackage(pkgId, card);
+
+            const redownloadBtn = isMissing
+                ? `<button class="btn btn-xs btn-warning ms-1"
+                        style="font-size:0.7em;padding:2px 7px"
+                        title="El archivo fue borrado por el servidor. Re-descárgalo desde el Paso 2."
+                        onclick="event.stopPropagation(); redownloadMissingPackage('${pkgId}', '${pkg.rfc || ''}')">
+                        <i class="fas fa-redo"></i> Re-descargar
+                    </button>`
+                : '';
+
             card.innerHTML = `
-                <div class="pkg-icon"><i class="fas ${grupo.icon}" style="color:${grupo.color}"></i></div>
+                <div class="pkg-icon"><i class="fas ${grupo.icon}" style="color:${isMissing ? '#f59e0b' : grupo.color}"></i></div>
                 <div class="pkg-info">
                     <div class="pkg-name">${pkg.name}</div>
                     <div class="pkg-meta">${pkg.size} · ${new Date(pkg.date).toLocaleDateString()}</div>
+                    ${isMissing ? '<div class="pkg-meta" style="color:#f59e0b;font-size:0.7em"><i class="fas fa-info-circle"></i> Railway borró este archivo. Usa Re-descargar o ve al Paso 2.</div>' : ''}
                 </div>
                 ${statusBadge}
-                <div class="pkg-check"><i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'}"></i></div>
+                ${redownloadBtn}
+                <div class="pkg-check"><i class="fas ${isSelected && !isMissing ? 'fa-check-square' : 'fa-square'}"></i></div>
             `;
             body.appendChild(card);
         });
@@ -2182,6 +2219,24 @@ function toggleSelectGroup(groupKey, checked) {
     });
     updateSelectionUI();
 }
+
+// ─── Re-descargar paquete perdido (Railway borró el archivo del disco) ─────────
+// Navega al Paso 2 y lanza downloadRequest directamente si hay credenciales.
+window.redownloadMissingPackage = function(pkgId, rfc) {
+    const storedRfc = sessionStorage.getItem('sat_rfc') || rfc || '';
+    const hasCreds  = !!(sessionStorage.getItem('sat_rfc') && sessionStorage.getItem('sat_password'));
+
+    if (hasCreds) {
+        if (confirm(`¿Re-descargar el paquete ${pkgId.substring(0,8)}... desde el SAT?`)) {
+            downloadRequest(pkgId, { silent: false });
+        }
+    } else {
+        // Sin credenciales → ir al Paso 2 para autenticar
+        showToast('info', 'Credenciales requeridas',
+            'Ve al Paso 2, autentícate y usa el botón de descarga en el historial.', 6000);
+        selectStep(2);
+    }
+};
 
 function toggleSelectPackage(pkgId, cardElement) {
     if (selectedPackages.has(pkgId)) {
