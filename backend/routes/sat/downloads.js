@@ -34,9 +34,9 @@ function findZipLocally(pkgId, baseDir) {
 }
 
 // 4. Download
-router.post('/download', async (req, res) => {
+router.post('/download', authMiddleware, async (req, res) => {
     const { rfc, password, id, force } = req.body;
-    console.log(`[DEBUG] Descargando solicitud/paquete: ${id} para RFC: ${rfc}`);
+    console.log(`[DEBUG] Descargando solicitud/paquete: ${id} para RFC: ${rfc}, usuario: ${req.user?.id}`);
 
     const paths = getPaths(rfc);
     if (!paths) return res.status(400).json({ error: `Certificados no encontrados para el RFC: ${rfc}` });
@@ -71,17 +71,18 @@ router.post('/download', async (req, res) => {
                      try { packageIds = JSON.parse(pkgs); } catch (e) { packageIds = [pkgs]; }
                 }
                 
-                // Also update DB with latest status
+                // Also update DB with latest status — aislamiento: solo la solicitud de este usuario
                 await pool.query(`
-                    UPDATE solicitudes_sat 
+                    UPDATE solicitudes_sat
                     SET estado_solicitud = ?, codigo_estado_solicitud = ?, mensaje = ?, paquetes = ?
                     WHERE id_solicitud = ?
+                      AND (usuario_id = ? OR usuario_id IS NULL)
                 `, [
                     verifyResult.data.estado_solicitud,
                     verifyResult.data.codigo_estado_solicitud,
                     verifyResult.data.mensaje,
                     JSON.stringify(packageIds),
-                    id
+                    id, req.user.id
                 ]);
             }
         } catch (verifyError) {
@@ -172,10 +173,11 @@ router.post('/download', async (req, res) => {
         // Update fecha_descarga only if at least one success
         if (successCount > 0) {
             await pool.query(`
-                UPDATE solicitudes_sat 
-                SET fecha_descarga = NOW() 
+                UPDATE solicitudes_sat
+                SET fecha_descarga = NOW()
                 WHERE id_solicitud = ?
-            `, [id]);
+                  AND (usuario_id = ? OR usuario_id IS NULL)
+            `, [id, req.user.id]);
         }
 
         // Return summary. If only 1 package, return like before for compatibility.
