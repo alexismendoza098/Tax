@@ -180,9 +180,17 @@ router.post('/download', async (req, res) => {
         // Return summary. If only 1 package, return like before for compatibility.
         if (results.length === 1 && results[0].status === 'success') {
              res.json(results[0]);
+        } else if (successCount === 0) {
+            // TODOS fallaron → HTTP 422 para que el frontend lo detecte como error real
+            const firstErr = results[0]?.error || results[0]?.mensaje || 'Sin detalles del SAT';
+            return res.status(422).json({
+                status: 'error',
+                message: `Ningún paquete pudo descargarse. ${firstErr}`,
+                results: results
+            });
         } else {
-             res.json({ 
-                 status: successCount > 0 ? 'success' : 'partial_error',
+             res.json({
+                 status: 'partial_success',
                  message: `Descargados ${successCount} de ${packageIds.length} paquetes`,
                  results: results
              });
