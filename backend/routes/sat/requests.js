@@ -303,20 +303,18 @@ router.delete('/history/:rfc', authMiddleware, async (req, res) => {
     }
 });
 
-// GET /history — solicitudes del usuario autenticado (aislamiento multi-tenant)
+// GET /history — solicitudes del usuario autenticado (aislamiento estricto)
 router.get('/history', authMiddleware, async (req, res) => {
     try {
-        // Filtrar por usuario_id (solicitudes guardadas con el nuevo campo)
-        // O por RFC que pertenezca al usuario (migración de datos históricos)
+        // AISLAMIENTO ESTRICTO: solo solicitudes de este usuario.
+        // Se eliminó el fallback "OR usuario_id IS NULL" porque causaba que
+        // usuarios distintos vieran solicitudes ajenas cuando compartían RFC.
         const [rows] = await pool.query(`
             SELECT s.* FROM solicitudes_sat s
             WHERE s.usuario_id = ?
-               OR (s.usuario_id IS NULL AND s.rfc IN (
-                     SELECT rfc FROM contribuyentes WHERE usuario_id = ?
-                   ))
             ORDER BY s.fecha_solicitud DESC
             LIMIT 1000
-        `, [req.user.id, req.user.id]);
+        `, [req.user.id]);
         const history = rows.map(row => {
             let packets = [];
             try {
@@ -333,14 +331,15 @@ router.get('/history', authMiddleware, async (req, res) => {
     }
 });
 
-router.get('/history/:rfc', async (req, res) => {
+// GET /history/:rfc — aislamiento estricto: solo el propio usuario puede ver su historial por RFC
+router.get('/history/:rfc', authMiddleware, async (req, res) => {
     try {
         const { rfc } = req.params;
         const [rows] = await pool.query(`
-            SELECT * FROM solicitudes_sat 
-            WHERE rfc = ? 
+            SELECT * FROM solicitudes_sat
+            WHERE rfc = ? AND usuario_id = ?
             ORDER BY fecha_solicitud DESC
-        `, [rfc]);
+        `, [rfc, req.user.id]);
         
         // Parse packets back to JSON
         const history = rows.map(row => {
