@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const pool = require('../../db');
-const { runSatScript, getPaths, getDateChunks } = require('../../utils/satHelpers');
+const { runSatScript, getPaths, cleanTempPaths, getDateChunks } = require('../../utils/satHelpers');
 const { randomUUID } = require('crypto');
 const { authMiddleware } = require('../../middleware/auth');
 
@@ -203,17 +203,20 @@ async function processRequestInBackground({ jobId, groupId, rfc, password, paths
     job.finishedAt = new Date().toISOString();
     console.log(`[SAT Job ${jobId}] ${job.message}`);
 
+    // Limpiar archivos FIEL temporales de /tmp
+    cleanTempPaths(paths);
+
     // Auto-cleanup job after 30 min
     setTimeout(() => jobs.delete(jobId), 30 * 60 * 1000);
 }
 
 // 3. Verify
 router.post('/verify', async (req, res) => {
-    try {
-        const { rfc, password, id } = req.body;
-        const paths = getPaths(rfc);
-        if (!paths) return res.status(400).json({ error: "Certificados no encontrados" });
+    const { rfc, password, id } = req.body;
+    const paths = getPaths(rfc);
+    if (!paths) return res.status(400).json({ error: "Certificados no encontrados" });
 
+    try {
         const args = [
             '--action', 'verify',
             '--rfc', rfc,
@@ -227,12 +230,12 @@ router.post('/verify', async (req, res) => {
 
         // Update DB
         const data = result.data || {};
-        if (data.estado_solicitud !== undefined || data.codigo_estado_solicitud) { 
+        if (data.estado_solicitud !== undefined || data.codigo_estado_solicitud) {
              await pool.query(`
-                INSERT INTO solicitudes_sat 
+                INSERT INTO solicitudes_sat
                 (id_solicitud, rfc, estado_solicitud, codigo_estado_solicitud, mensaje, paquetes)
                 VALUES (?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
+                ON DUPLICATE KEY UPDATE
                 estado_solicitud = VALUES(estado_solicitud),
                 codigo_estado_solicitud = VALUES(codigo_estado_solicitud),
                 mensaje = VALUES(mensaje),
@@ -251,6 +254,8 @@ router.post('/verify', async (req, res) => {
 
     } catch (error) {
         res.status(500).json({ error: error.message });
+    } finally {
+        cleanTempPaths(paths);
     }
 });
 

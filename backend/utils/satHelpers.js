@@ -166,21 +166,33 @@ const runSatScript = async (argsArray, timeout = 300000) => {
   }
 };
 
-// ── Raíz de uploads — configurable con UPLOAD_DIR para Railway/cloud ─────────
-// En local → backend/uploads/
-// En Railway → la ruta del Volume que definas (ej: /data/uploads)
-const UPLOADS_ROOT = process.env.UPLOAD_DIR
-  || path.join(__dirname, '..', 'uploads');
+const os = require('os');
+const { randomUUID } = require('crypto');
+const { getFiel } = require('./fielStore');
 
-// ── Get certificate paths ─────────────────────────────────────────────────────
+// ── getPaths: escribe buffers desde memoria a /tmp solo cuando se necesitan ───
+// Los archivos se crean en /tmp (efímero), se usan para la llamada al SAT,
+// y el llamador es responsable de borrarlos con cleanTempPaths().
 const getPaths = (rfc) => {
   const cleanRfc = rfc.toUpperCase().trim();
-  const dir      = path.join(UPLOADS_ROOT, 'certs', cleanRfc);
-  const cerPath  = path.join(dir, 'cer.cer');
-  const keyPath  = path.join(dir, 'key.key');
+  const fiel = getFiel(cleanRfc);
+  if (!fiel) return null;
 
-  if (!fs.existsSync(cerPath) || !fs.existsSync(keyPath)) return null;
-  return { cer: cerPath, key: keyPath };
+  // Escribir en /tmp con nombre único para evitar colisiones
+  const uid    = randomUUID();
+  const cerPath = path.join(os.tmpdir(), `fiel_${uid}.cer`);
+  const keyPath = path.join(os.tmpdir(), `fiel_${uid}.key`);
+  fs.writeFileSync(cerPath, fiel.cerBuf);
+  fs.writeFileSync(keyPath, fiel.keyBuf);
+
+  return { cer: cerPath, key: keyPath, _tmp: true };
+};
+
+// ── cleanTempPaths: borra archivos temporales de /tmp después de usarlos ──────
+const cleanTempPaths = (paths) => {
+  if (!paths?._tmp) return;
+  try { if (fs.existsSync(paths.cer)) fs.unlinkSync(paths.cer); } catch (_) {}
+  try { if (fs.existsSync(paths.key)) fs.unlinkSync(paths.key); } catch (_) {}
 };
 
 // ── Split date range into monthly chunks ─────────────────────────────────────
@@ -230,6 +242,7 @@ module.exports = {
   runSatNodeScript,
   runSatPythonScript,
   getPaths,
+  cleanTempPaths,
   getDateChunks,
   getWeeklyChunks,
   SAT_STATUS_CODES,
