@@ -612,27 +612,32 @@ router.get('/preview/:packageId', authMiddleware, async (req, res) => {
 router.get('/packages', authMiddleware, async (req, res) => {
     try {
         // ── DB-FIRST: leer desde solicitudes_sat (persiste en Railway) ──────────
-        // Incluye:
-        //   a) Solicitudes con paquetes ya conocidos (paquetes IS NOT NULL)
-        //   b) Solicitudes Terminadas (estado=3) sin paquetes → el usuario puede re-verificar
+        // paquetes es columna JSON en MySQL — usar JSON_TYPE/JSON_LENGTH para comparaciones seguras
         const [solicitudes] = await pool.query(`
             SELECT rfc, tipo_solicitud, tipo_comprobante, paquetes,
                    fecha_descarga, id_solicitud, estado_solicitud
             FROM solicitudes_sat
             WHERE (
-                    (paquetes IS NOT NULL AND paquetes != '[]' AND paquetes != 'null')
-                    OR estado_solicitud = 3
+                    (paquetes IS NOT NULL AND JSON_TYPE(paquetes) = 'ARRAY' AND JSON_LENGTH(paquetes) > 0)
+                    OR CAST(estado_solicitud AS UNSIGNED) = 3
                   )
               AND (
                 usuario_id = ?
-                OR (usuario_id IS NULL AND rfc IN (
+                OR usuario_id IS NULL
+                OR rfc IN (
                       SELECT rfc FROM contribuyentes WHERE usuario_id = ?
-                    ))
+                    )
               )
             ORDER BY COALESCE(fecha_descarga, fecha_solicitud) DESC
             LIMIT 500
         `, [req.user.id, req.user.id]);
-        console.log(`[Packages] Usuario ${req.user.id}: ${solicitudes.length} solicitudes encontradas`);
+        console.log(`[Packages] Usuario ${req.user.id}: ${solicitudes.length} solicitudes, detalle:`,
+            JSON.stringify(solicitudes.slice(0,3).map(s => ({
+                id: s.id_solicitud?.slice(0,8),
+                pkgs: s.paquetes ? JSON.stringify(s.paquetes).slice(0,60) : null,
+                estado: s.estado_solicitud,
+                uid: s.usuario_id
+            }))));
 
         // ── "Procesado" para CFDI: verificar en comprobantes del usuario ──────
         const [cfdiRows] = await pool.query(`
@@ -727,6 +732,7 @@ router.get('/packages', authMiddleware, async (req, res) => {
 
         // Sort by date desc
         packages.sort((a, b) => new Date(b.date) - new Date(a.date));
+        console.log(`[Packages] Respuesta final: ${packages.length} paquetes para usuario ${req.user.id}`);
         res.json(packages);
     } catch (e) {
         console.error("List Packages Error:", e);
