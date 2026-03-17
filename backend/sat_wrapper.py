@@ -12,7 +12,45 @@ from datetime import datetime, timedelta
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-from cfdiclient import Autenticacion, Fiel, SolicitaDescargaEmitidos, SolicitaDescargaRecibidos, VerificaSolicitudDescarga, DescargaMasiva
+def _ts():
+    """Retorna timestamp actual para logs."""
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+try:
+    from cfdiclient import Autenticacion, Fiel, SolicitaDescargaEmitidos, SolicitaDescargaRecibidos, VerificaSolicitudDescarga, DescargaMasiva
+except ImportError as _import_err:
+    print(json.dumps({
+        "status": "error",
+        "message": (
+            f"[{_ts()}] No se pudo importar cfdiclient: {_import_err}. "
+            "Instala la dependencia con: pip install cfdiclient"
+        )
+    }), flush=True)
+    sys.exit(1)
+
+# Diccionario de códigos de estado SAT
+SAT_STATUS_CODES = {
+    '5000': 'Solicitud recibida correctamente.',
+    '5001': 'En proceso — el SAT está preparando los paquetes.',
+    '5002': 'Límite de por vida alcanzado para ese periodo exacto. Cambia la fecha ±1 segundo.',
+    '5003': 'Más de 200,000 CFDIs en el rango. Divide el periodo en fragmentos más pequeños.',
+    '5004': 'Sin información — no hay CFDIs para los parámetros indicados.',
+    '5005': 'Solicitud duplicada — ya existe una solicitud vigente con esos parámetros.',
+    '5011': 'Límite diario de descargas alcanzado. Espera 24 horas.',
+    '5012': 'No se permite descargar XMLs cancelados. Usa Metadata o selecciona estado Vigente.',
+    '300':  'Usuario no válido — FIEL vencida o datos incorrectos.',
+    '301':  'XML mal formado — error en la petición SOAP.',
+    '404':  'Paquete no encontrado o expirado. Puede que el paquete haya sido eliminado del SAT o nunca existió.',
+    '1':    'Solicitud aceptada.',
+    '2':    'En proceso — el SAT está preparando los paquetes (puede tardar horas).',
+    '3':    'Terminada — los paquetes están listos para descargar.',
+    '4':    'Error interno del SAT en la solicitud.',
+    '5':    'Solicitud rechazada por el SAT.',
+    '6':    'Solicitud vencida — envía una nueva.',
+}
+
+# Timeout en segundos para llamadas SOAP al SAT
+SAT_SOAP_TIMEOUT = 120
 
 # Configuración básica
 # OUTPUT_DIR removed, now per-RFC
@@ -36,25 +74,29 @@ class SatIntegration:
 
     def load_fiel(self):
         try:
+            print(f"[{_ts()}] Cargando FIEL desde: {self.cer_path}", file=sys.stderr, flush=True)
             with open(self.cer_path, 'rb') as f: cer_content = f.read()
             with open(self.key_path, 'rb') as f: key_content = f.read()
             self.fiel = Fiel(cer_content, key_content, self.password)
+            print(f"[{_ts()}] FIEL cargada correctamente.", file=sys.stderr, flush=True)
         except Exception as e:
-            print(json.dumps({"status": "error", "message": f"Error loading FIEL: {str(e)}"}))
+            print(json.dumps({"status": "error", "message": f"[{_ts()}] Error cargando FIEL: {str(e)}"}))
             sys.exit(1)
 
     def authenticate(self, force=False):
         if self.token and not force:
             return self.token
-            
+
         try:
+            print(f"[{_ts()}] Autenticando con el SAT...", file=sys.stderr, flush=True)
             auth = Autenticacion(self.fiel)
             self.token = auth.obtener_token()
             if not self.token:
                 raise Exception("Token nulo recibido del SAT")
+            print(f"[{_ts()}] Autenticación exitosa.", file=sys.stderr, flush=True)
             return self.token
         except Exception as e:
-            print(json.dumps({"status": "error", "message": f"Authentication failed: {str(e)}"}))
+            print(json.dumps({"status": "error", "message": f"[{_ts()}] Autenticación fallida: {str(e)}"}))
             sys.exit(1)
 
     def _is_bad_token(self, response):
@@ -115,6 +157,9 @@ class SatIntegration:
         ranges = self.split_dates(start, end)
         results = []
 
+        # Esperas exponenciales para reintentos: 1s, 2s, 4s
+        RETRY_WAITS = [1, 2, 4]
+
         for s, e in ranges:
             # Set end time to 23:59:59 to ensure valid range (start < end) and full day coverage
             e = e.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -126,6 +171,7 @@ class SatIntegration:
 
             for attempt in range(max_retries):
                 try:
+                    print(f"[{_ts()}] Solicitud {s_adj.strftime('%Y-%m-%d')}→{e.strftime('%Y-%m-%d')} (intento {attempt+1}/{max_retries})", file=sys.stderr, flush=True)
                     # Re-instantiate service to be safe
                     service = ServiceClass(self.fiel)
 
@@ -140,14 +186,18 @@ class SatIntegration:
 
                     # Token check from Descargas (1).py
                     if self._is_bad_token(r):
+                        print(f"[{_ts()}] Token inválido — re-autenticando...", file=sys.stderr, flush=True)
                         if attempt < max_retries - 1:
                             self.authenticate(force=True)
+                            time.sleep(RETRY_WAITS[min(attempt, len(RETRY_WAITS)-1)])
                             continue
 
                     cod = str(r.get('cod_estatus') or r.get('codigo_estado_solicitud') or '')
+                    cod_desc = SAT_STATUS_CODES.get(cod, f'Código SAT desconocido: {cod}')
 
                     # Check for valid ID
                     if r.get('id_solicitud'):
+                        print(f"[{_ts()}] Solicitud aceptada. ID: {r.get('id_solicitud')}", file=sys.stderr, flush=True)
                         results.append({
                             "id_solicitud": r.get('id_solicitud'),
                             "fecha_inicio": s_adj.strftime('%Y-%m-%d'),
@@ -160,19 +210,34 @@ class SatIntegration:
                         break # Success for this range
                     elif cod == '5002' and s_adj == s and attempt < max_retries - 1:
                         # SAT: límite de por vida — reintento con inicio +1 segundo
+                        print(f"[{_ts()}] SAT 5002 — reintentando con desfase de 1 segundo.", file=sys.stderr, flush=True)
                         s_adj = s + timedelta(seconds=1)
-                        time.sleep(1)
+                        time.sleep(RETRY_WAITS[min(attempt, len(RETRY_WAITS)-1)])
                         continue
+                    elif cod == '404':
+                        print(f"[{_ts()}] SAT 404 — paquete no existe o expiró.", file=sys.stderr, flush=True)
+                        results.append({"error": cod_desc, "cod_estatus": cod, "data": r})
+                        break
                     else:
                         # SAT Error or specific message
+                        print(f"[{_ts()}] SAT error cod={cod}: {cod_desc}", file=sys.stderr, flush=True)
                         if attempt == max_retries - 1:
-                            results.append({"error": r.get('mensaje'), "data": r})
+                            results.append({
+                                "error": r.get('mensaje') or cod_desc,
+                                "cod_estatus": cod,
+                                "data": r
+                            })
+                        else:
+                            time.sleep(RETRY_WAITS[min(attempt, len(RETRY_WAITS)-1)])
+                            continue
 
                 except Exception as exc:
+                    print(f"[{_ts()}] Excepción en intento {attempt+1}: {exc}", file=sys.stderr, flush=True)
                     if attempt == max_retries - 1:
                         results.append({"error": str(exc)})
-                    time.sleep(2)
-            
+                    else:
+                        time.sleep(RETRY_WAITS[min(attempt, len(RETRY_WAITS)-1)])
+
             # Avoid SAT flooding
             time.sleep(1)
 
@@ -185,15 +250,23 @@ class SatIntegration:
     def verify_request(self, request_id):
         self.authenticate()
         try:
+            print(f"[{_ts()}] Verificando solicitud: {request_id}", file=sys.stderr, flush=True)
             verifier = VerificaSolicitudDescarga(self.fiel)
             result = verifier.verificar_descarga(self.token, self.rfc, request_id)
-            
+
             if self._is_bad_token(result):
+                print(f"[{_ts()}] Token inválido — re-autenticando para verificar...", file=sys.stderr, flush=True)
                 self.authenticate(force=True)
                 result = verifier.verificar_descarga(self.token, self.rfc, request_id)
-                
+
+            cod = str(result.get('cod_estatus') or result.get('codigo_estado_solicitud') or '')
+            if cod == '404':
+                return {"error": SAT_STATUS_CODES['404'], "cod_estatus": "404"}
+
+            print(f"[{_ts()}] Verificación completada. Estado: {result.get('estado_solicitud', '?')}", file=sys.stderr, flush=True)
             return result
         except Exception as e:
+            print(f"[{_ts()}] Error al verificar solicitud: {e}", file=sys.stderr, flush=True)
             return {"error": str(e)}
 
     def download_package(self, package_id, force=False):
@@ -201,34 +274,59 @@ class SatIntegration:
         try:
             downloader = DescargaMasiva(self.fiel)
             file_path = os.path.join(self.output_dir, f"{package_id}.zip")
-            
+
             # Check local file first
             if not force and os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-                 # Validation: Ensure it is a valid zip
-                 if zipfile.is_zipfile(file_path):
-                     return {"status": "success", "file": file_path, "message": "File already exists and is valid"}
-                 else:
-                     print(f"File {file_path} exists but is invalid/corrupt. Re-downloading.")
-
-            result = downloader.descargar_paquete(self.token, self.rfc, package_id)
-            
-            if self._is_bad_token(result):
-                self.authenticate(force=True)
-                result = downloader.descargar_paquete(self.token, self.rfc, package_id)
-
-            if result.get('paquete_b64'):
-                data = base64.b64decode(result['paquete_b64'])
-                with open(file_path, 'wb') as f:
-                    f.write(data)
-                
-                # Verify integrity
                 if zipfile.is_zipfile(file_path):
-                    return {"status": "success", "file": file_path, "size": len(data)}
+                    print(f"[{_ts()}] Paquete {package_id} ya existe localmente (caché).", file=sys.stderr, flush=True)
+                    return {"status": "success", "file": file_path, "message": "File already exists and is valid"}
                 else:
-                    return {"status": "error", "message": "Downloaded file is not a valid ZIP", "file": file_path}
-            else:
-                return {"status": "error", "message": "No content", "data": result}
+                    print(f"[{_ts()}] Archivo {file_path} existe pero es inválido/corrupto. Re-descargando.", file=sys.stderr, flush=True)
+
+            # Retry descarga con backoff exponencial
+            RETRY_WAITS = [1, 2, 4]
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    print(f"[{_ts()}] Descargando paquete {package_id} (intento {attempt+1}/{max_retries})...", file=sys.stderr, flush=True)
+                    result = downloader.descargar_paquete(self.token, self.rfc, package_id)
+
+                    if self._is_bad_token(result):
+                        print(f"[{_ts()}] Token inválido — re-autenticando para descargar...", file=sys.stderr, flush=True)
+                        self.authenticate(force=True)
+                        result = downloader.descargar_paquete(self.token, self.rfc, package_id)
+
+                    cod = str(result.get('cod_estatus') or '')
+                    if cod == '404':
+                        return {"status": "error", "message": SAT_STATUS_CODES['404'], "cod_estatus": "404"}
+
+                    if result.get('paquete_b64'):
+                        data = base64.b64decode(result['paquete_b64'])
+                        with open(file_path, 'wb') as f:
+                            f.write(data)
+
+                        if zipfile.is_zipfile(file_path):
+                            print(f"[{_ts()}] Paquete {package_id} descargado correctamente ({len(data)} bytes).", file=sys.stderr, flush=True)
+                            return {"status": "success", "file": file_path, "size": len(data)}
+                        else:
+                            return {"status": "error", "message": "El archivo descargado no es un ZIP válido", "file": file_path}
+                    else:
+                        err_msg = result.get('mensaje') or SAT_STATUS_CODES.get(cod, f'Sin contenido (cod={cod})')
+                        if attempt < max_retries - 1:
+                            print(f"[{_ts()}] Sin contenido en intento {attempt+1} — reintentando...", file=sys.stderr, flush=True)
+                            time.sleep(RETRY_WAITS[attempt])
+                            continue
+                        return {"status": "error", "message": err_msg, "data": result}
+
+                except Exception as exc:
+                    print(f"[{_ts()}] Excepción en descarga intento {attempt+1}: {exc}", file=sys.stderr, flush=True)
+                    if attempt < max_retries - 1:
+                        time.sleep(RETRY_WAITS[attempt])
+                    else:
+                        raise
+
         except Exception as e:
+            print(f"[{_ts()}] Error fatal al descargar paquete {package_id}: {e}", file=sys.stderr, flush=True)
             return {"error": str(e)}
 
 if __name__ == "__main__":

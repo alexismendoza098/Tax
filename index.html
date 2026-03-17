@@ -162,16 +162,14 @@
                 <div>
                     <div class="hero-badge"><i class="fas fa-certificate"></i> Integración SAT México</div>
                     <h1>ETaxes<span style="color:var(--accent-green)">+</span> <small style="font-size:0.5em;opacity:0.7;font-weight:400;">SAT</small></h1>
-                    <p style="margin:0;font-size:0.92rem;opacity:0.8;">Descarga · Procesa · Analiza CFDIs desde el SAT</p>
+                    <p style="margin:0;font-size:0.92rem;opacity:0.8;">Autenticación · Adquisición · Procesamiento de CFDIs del SAT</p>
                 </div>
                 <div class="hero-steps-mini">
-                    <span><i class="fas fa-key"></i> e.Firma</span>
+                    <span><i class="fas fa-key"></i> Autenticación</span>
                     <i class="fas fa-arrow-right" style="opacity:0.4;font-size:0.7rem;"></i>
-                    <span><i class="fas fa-cloud-download-alt"></i> Descarga</span>
+                    <span><i class="fas fa-cloud-download-alt"></i> Adquisición</span>
                     <i class="fas fa-arrow-right" style="opacity:0.4;font-size:0.7rem;"></i>
-                    <span><i class="fas fa-file-code"></i> Procesa</span>
-                    <i class="fas fa-arrow-right" style="opacity:0.4;font-size:0.7rem;"></i>
-                    <span><i class="fas fa-search-dollar"></i> Analiza</span>
+                    <span><i class="fas fa-file-code"></i> Procesamiento</span>
                 </div>
             </div>
         </section>
@@ -401,6 +399,7 @@
                         <button class="detail-tab active" onclick="showTab(2, 'simulator')"><i class="fas fa-cloud-download-alt"></i> Descargar</button>
                         <button class="detail-tab" onclick="showTab(2, 'full')"><i class="fas fa-layer-group"></i> Descarga Completa</button>
                         <button class="detail-tab" onclick="showTab(2, 'history')"><i class="fas fa-history"></i> Mis Solicitudes</button>
+                        <button class="detail-tab" onclick="showTab(2, 'rfcs');loadContribuyentes()"><i class="fas fa-id-card"></i> Mis RFCs</button>
                     </div>
                 </div>
 
@@ -649,6 +648,38 @@
                                 <span class="sim-prompt">$</span>
                                 <span class="sim-output">Configura las fechas y haz clic en "Iniciar Descarga Completa"...</span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-content" id="panel-2-rfcs">
+                    <div class="clients-panel" style="padding:0;">
+                        <div class="clients-header" style="padding:1rem 0 1rem 0;">
+                            <div class="clients-header-left">
+                                <div class="clients-icon"><i class="fas fa-id-card"></i></div>
+                                <div>
+                                    <h2 class="clients-title" style="font-size:1.1rem;">Mis RFCs Registrados</h2>
+                                    <p class="clients-subtitle">Administra los RFCs asociados a tu cuenta</p>
+                                </div>
+                            </div>
+                            <button class="btn-client-new" onclick="openContribModal()">
+                                <i class="fas fa-plus"></i> Agregar RFC
+                            </button>
+                        </div>
+                        <div id="contrib-table-wrap-inline" style="margin-top:0.5rem;">
+                            <table class="audit-table" style="width:100%;">
+                                <thead>
+                                    <tr>
+                                        <th>RFC</th>
+                                        <th>Nombre / Razón Social</th>
+                                        <th>Régimen Fiscal</th>
+                                        <th style="width:80px;text-align:center;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="contrib-tbody">
+                                    <tr><td colspan="4" style="text-align:center;padding:2rem;opacity:0.5;">Cargando...</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>

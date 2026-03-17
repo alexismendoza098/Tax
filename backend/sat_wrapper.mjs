@@ -68,6 +68,8 @@ const errOut = (msg, data = {}) => {
   process.exit(1);
 };
 const sleep  = (ms) => new Promise(r => setTimeout(r, ms));
+const ts     = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
+const log    = (...args) => process.stderr.write(`[${ts()}] ${args.join(' ')}\n`);
 
 // ── Diccionario de códigos SAT (unificado Python + Node) ─────────────────────
 export const SAT_CODES = {
@@ -83,6 +85,8 @@ export const SAT_CODES = {
   // Autenticación
   '300':  { label: 'Usuario no válido',         ok: false, icon: '❌', desc: 'FIEL vencida o datos incorrectos. Actualiza tu e.Firma.' },
   '301':  { label: 'XML mal formado',           ok: false, icon: '❌', desc: 'Error en la petición SOAP. Verifica la versión de la librería.' },
+  // Paquete no encontrado / expirado
+  '404':  { label: 'Paquete no encontrado',     ok: false, icon: '🗑️',  desc: 'El paquete no existe o ya expiró en los servidores del SAT. Envía una nueva solicitud.' },
   // estado_solicitud (VerificaSolicitudDescarga)
   '1':    { label: 'Aceptada',                  ok: true,  icon: '📋', desc: 'La solicitud fue aceptada.' },
   '2':    { label: 'En proceso',                ok: true,  icon: '⏳', desc: 'El SAT está preparando los paquetes (puede tardar horas).' },
@@ -321,7 +325,7 @@ async function actionRequest(args) {
         });
         break; // éxito
       } else if (code === '5002' && attempt < MAX_RETRY) {
-        console.error(`[SAT 5002] Reintentando ${start}→${end} con desfase de segundos (intento ${attempt}/${MAX_RETRY})`);
+        log(`[SAT 5002] Reintentando ${start}→${end} con desfase de segundos (intento ${attempt}/${MAX_RETRY})`);
         await sleep(1500);
         continue;
       } else {
@@ -338,7 +342,7 @@ async function actionRequest(args) {
     } catch (e) {
       const isLastAttempt = attempt >= MAX_RETRY;
       const errMsg = e.message || String(e);
-      console.error(`[SAT] Intento ${attempt}/${MAX_RETRY} fallido: ${errMsg.substring(0, 100)}`);
+      log(`[SAT] Intento ${attempt}/${MAX_RETRY} fallido: ${errMsg.substring(0, 100)}`);
 
       if (isLastAttempt) {
         results.push({
@@ -503,7 +507,7 @@ async function actionDownload(args) {
     } catch (e) {
       const isLastAttempt = attempt >= MAX_RETRY;
       const errMsg = e.message || String(e);
-      console.error(`[SAT Download] Intento ${attempt}/${MAX_RETRY}: ${errMsg.substring(0, 100)}`);
+      log(`[SAT Download] Intento ${attempt}/${MAX_RETRY}: ${errMsg.substring(0, 100)}`);
 
       if (isLastAttempt) {
         errOut(`Error al descargar paquete ${args.id}: ${errMsg.substring(0, 200)}`);

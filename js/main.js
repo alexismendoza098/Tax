@@ -2596,9 +2596,12 @@ function updateAdminUI() {
     const isLoggedIn = currentUser && (currentUser.role === 'admin' || currentUser.role === 'user');
     const isAdmin    = currentUser && currentUser.role === 'admin';
 
-    // Secciones disponibles para todos los usuarios autenticados
-    const commonNavs = [navAuditoria, navFiscal, navEstadosCuenta, navContribuyentes];
-    commonNavs.forEach(n => { if(n) n.style.display = isLoggedIn ? 'block' : 'none'; });
+    // Auditoría: visible para todos los usuarios autenticados
+    if (navAuditoria) navAuditoria.style.display = isLoggedIn ? 'block' : 'none';
+
+    // Módulos avanzados (Fiscal, Conciliación, Mis RFCs): ocultos del nav principal
+    // Mis RFCs se accede desde el tab en Panel 2 (Adquisición)
+    [navFiscal, navEstadosCuenta, navContribuyentes].forEach(n => { if(n) n.style.display = 'none'; });
 
     // Seccion Clientes/Usuarios: SOLO visible para administradores
     if (navAdmin) navAdmin.style.display = isAdmin ? 'block' : 'none';
