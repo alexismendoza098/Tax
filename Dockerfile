@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
 # Instalar dependencias del sistema (Python para sat_wrapper.py + bash para scripts)
-RUN apk add --no-cache python3 py3-pip bash
+RUN apk add --no-cache python3 py3-pip bash && pip3 install cfdiclient --break-system-packages || pip3 install cfdiclient
 
 WORKDIR /app
 
