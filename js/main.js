@@ -9,6 +9,7 @@ let backendOnline = false;
 // se recupera automáticamente sin perder el progreso.
 // =====================================================
 const PENDING_JOB_KEY = 'etx_sat_pending_job';
+const FULL_JOBS_KEY   = 'etx_sat_full_jobs';  // jobs del flujo 4-en-1 en background
 
 // =====================================================
 // API URL — determina el endpoint correcto según entorno
@@ -1121,6 +1122,16 @@ async function pollJobStatus(jobId, output, progFill, progPct, totalChunks) {
 // Lanza Metadata+CFDI × Recibidos+Emitidos en paralelo
 // =====================================================
 
+// Calcula cuánto tiempo esperar activamente antes de pasar a background,
+// según el rango de fechas. Rangos grandes = más tiempo inicial.
+function calcDynamicTimeout(startStr, endStr) {
+    const months = (new Date(endStr) - new Date(startStr)) / (1000 * 60 * 60 * 24 * 30.44);
+    if (months <= 1)  return  3 * 60 * 1000; //  3 min — rango de 1 mes
+    if (months <= 6)  return  5 * 60 * 1000; //  5 min — hasta medio año
+    if (months <= 24) return 10 * 60 * 1000; // 10 min — hasta 2 años
+    return                   15 * 60 * 1000; // 15 min — más de 2 años
+}
+
 async function startFullDownload() {
     const rfc = sessionStorage.getItem('sat_rfc');
     const password = sessionStorage.getItem('sat_password');
@@ -1204,8 +1215,9 @@ async function startFullDownload() {
     const valid = jobResults.filter(r => r !== null);
     addSimLine(output, `⏳ Monitoreando ${valid.length}/4 jobs en paralelo...`, 'info');
 
+    const dynamicTimeout = calcDynamicTimeout(start, end);
     await Promise.allSettled(valid.map(({ req, jobId, totalChunks }) =>
-        pollFullJob(jobId, req.cardId, req.label, totalChunks, output)
+        pollFullJob(jobId, req.cardId, req.label, totalChunks, output, dynamicTimeout)
     ));
 
     addSimLine(output, '✅ Proceso completado. Revisa el historial de solicitudes.', 'success');
@@ -1213,8 +1225,7 @@ async function startFullDownload() {
     btn.disabled = false;
 }
 
-async function pollFullJob(jobId, cardId, label, totalChunks, output) {
-    const maxWait = 180000; // 3 min
+async function pollFullJob(jobId, cardId, label, totalChunks, output, maxWait = 180000) {
     const interval = 3000;
     const started = Date.now();
 
@@ -1225,9 +1236,10 @@ async function pollFullJob(jobId, cardId, label, totalChunks, output) {
     return new Promise((resolve) => {
         const tick = async () => {
             if (Date.now() - started > maxWait) {
-                if (statusEl) { statusEl.textContent = '⚠️ Timeout'; statusEl.style.color = 'var(--warning, #f59e0b)'; }
-                if (msgEl)    { msgEl.textContent = 'Tiempo agotado. Verifica el historial.'; }
-                addSimLine(output, `⚠️ ${label}: Timeout — verifica el historial`, 'error');
+                if (statusEl) { statusEl.textContent = '🔄 En segundo plano'; statusEl.style.color = 'var(--warning, #f59e0b)'; }
+                if (msgEl)    { msgEl.textContent = 'Monitoreando en segundo plano... El SAT puede tardar hasta 72h.'; }
+                if (output)   addSimLine(output, `🔄 ${label}: Monitoreando en segundo plano — recibirás notificación al terminar`, 'warning');
+                backgroundPollFullJob(jobId, cardId, label, output);
                 return resolve();
             }
 
@@ -1271,12 +1283,101 @@ async function pollFullJob(jobId, cardId, label, totalChunks, output) {
 }
 
 // =====================================================
+// MONITOREO EN SEGUNDO PLANO — FLUJO 4-EN-1
+// Se activa cuando pollFullJob() agota su timeout.
+// Sigue chequeando el job cada 5s sin bloquear la UI.
+// Persiste en localStorage para sobrevivir recargas.
+// =====================================================
+function backgroundPollFullJob(jobId, cardId, label, output) {
+    const existing = JSON.parse(localStorage.getItem(FULL_JOBS_KEY) || '[]');
+    if (!existing.find(j => j.jobId === jobId)) {
+        existing.push({ jobId, cardId, label, startedAt: Date.now() });
+        localStorage.setItem(FULL_JOBS_KEY, JSON.stringify(existing));
+    }
+
+    const fillEl   = document.getElementById(`full-fill-${cardId}`);
+    const statusEl = document.getElementById(`full-status-${cardId}`);
+    const msgEl    = document.getElementById(`full-msg-${cardId}`);
+    let networkRetries = 0;
+    const MAX_NET_RETRIES = 5;
+
+    const poll = async () => {
+        try {
+            const res = await apiFetch(`/sat/job/${jobId}`);
+            if (!res.ok) {
+                // Job expiró (servidor se reinició)
+                _removeFullJob(jobId);
+                if (statusEl) statusEl.textContent = '⚠️ Expirado';
+                if (msgEl)    msgEl.textContent = 'El servidor se reinició. Revisa el historial.';
+                showToast('warning', label, 'Job expirado. Los datos están en el historial.', 8000);
+                loadDownloadHistory();
+                return;
+            }
+            networkRetries = 0;
+            const job = await res.json();
+
+            if (job.status === 'done') {
+                _removeFullJob(jobId);
+                if (fillEl)   fillEl.style.width = '100%';
+                if (statusEl) { statusEl.textContent = '✅ Listo'; statusEl.style.color = 'var(--accent-green)'; }
+                if (msgEl)    msgEl.textContent = job.message || 'Completado';
+                if (output)   addSimLine(output, `✅ ${label}: ${job.message || 'Completado'}`, 'success');
+                showToast('success', `✅ ${label}`, job.message || 'Paquetes disponibles en el historial.', 7000);
+                loadDownloadHistory();
+            } else if (job.status === 'error') {
+                _removeFullJob(jobId);
+                if (statusEl) { statusEl.textContent = '❌ Error'; statusEl.style.color = 'var(--danger)'; }
+                if (msgEl)    msgEl.textContent = job.error || 'Error al descargar';
+                showToast('error', `❌ ${label}`, job.error || 'Error al descargar', 8000);
+            } else {
+                if (msgEl && job.message) msgEl.textContent = `⏳ ${job.message}`;
+                setTimeout(poll, 5000);
+            }
+        } catch (_) {
+            networkRetries++;
+            if (networkRetries >= MAX_NET_RETRIES) {
+                _removeFullJob(jobId);
+                if (statusEl) statusEl.textContent = '⚠️ Sin conexión';
+                if (msgEl)    msgEl.textContent = 'Monitoreo detenido por error de red.';
+                return;
+            }
+            setTimeout(poll, 15000); // reintentar en 15s ante error de red
+        }
+    };
+    setTimeout(poll, 5000);
+}
+
+function _removeFullJob(jobId) {
+    const arr = JSON.parse(localStorage.getItem(FULL_JOBS_KEY) || '[]');
+    localStorage.setItem(FULL_JOBS_KEY, JSON.stringify(arr.filter(j => j.jobId !== jobId)));
+}
+
+// Recupera jobs del flujo 4-en-1 que quedaron en background tras recarga
+function checkPendingFullJobs() {
+    let jobs;
+    try { jobs = JSON.parse(localStorage.getItem(FULL_JOBS_KEY) || '[]'); }
+    catch (_) { localStorage.removeItem(FULL_JOBS_KEY); return; }
+
+    // Solo los jobs de las últimas 4 horas (límite del backend)
+    const alive = jobs.filter(j => Date.now() - j.startedAt < 4 * 60 * 60 * 1000);
+    if (!alive.length) { localStorage.removeItem(FULL_JOBS_KEY); return; }
+
+    localStorage.setItem(FULL_JOBS_KEY, JSON.stringify(alive));
+    showToast('info', `${alive.length} descarga(s) SAT en curso`,
+        'Retomando monitoreo en segundo plano...', 6000);
+    alive.forEach(({ jobId, cardId, label }) =>
+        backgroundPollFullJob(jobId, cardId, label, null));
+}
+
+// =====================================================
 // RECUPERACIÓN TRAS RECARGA DE PÁGINA
 // Detecta si había un job en curso y lo reanuda en
 // background (sin necesitar los elementos de UI).
 // Se llama desde onLoginSuccess().
 // =====================================================
 function checkPendingJob() {
+    checkPendingFullJobs(); // recuperar jobs del flujo 4-en-1 si los hay
+
     const raw = localStorage.getItem(PENDING_JOB_KEY);
     if (!raw) return;
 
@@ -1339,8 +1440,8 @@ function backgroundPollJob(jobId) {
                 setTimeout(poll, 5000); // sigue esperando
             }
         } catch (_) {
-            // Error de red — reintentar en 10s, máx 3 veces implícito
-            localStorage.removeItem(PENDING_JOB_KEY);
+            // Error de red transitorio — reintentar en 15s en lugar de abandonar
+            setTimeout(poll, 15000);
         }
     };
     setTimeout(poll, 5000);

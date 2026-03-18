@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const pool = require('../../db');
-const { runSatScript, getPaths, cleanTempPaths, getDateChunks } = require('../../utils/satHelpers');
+const { runSatScript, getPaths, cleanTempPaths, getDateChunks, getWeeklyChunks } = require('../../utils/satHelpers');
 const { randomUUID } = require('crypto');
 const { authMiddleware } = require('../../middleware/auth');
 
@@ -119,117 +119,189 @@ router.post('/request', authMiddleware, async (req, res) => {
     });
 });
 
-// Background processing function
+// Pausa controlada entre peticiones al SAT para evitar rate limiting
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Helper: detectar código SAT en un error
+const getSatCode = (err) =>
+    err?.cod_estatus || err?.data?.[0]?.cod_estatus || err?.data?.[0]?.code || '';
+
+// Helper: extraer mensaje legible del error
+const getErrMsg = (err) =>
+    err?.message || err?.data?.[0]?.message || err?.data?.[0]?.error
+    || (err?.data ? `SAT: ${JSON.stringify(err.data).substring(0, 150)}` : '')
+    || 'Error desconocido';
+
+// Guarda en DB el resultado de un chunk
+async function saveChunkToDB({ data, chunk, rfc, type, cfdi_type, groupId, usuarioId, jobId }) {
+    const dataArr = Array.isArray(data) ? data : (data ? [data] : []);
+    for (const row of dataArr) {
+        if (!row || !row.id_solicitud || typeof row.id_solicitud !== 'string') continue;
+        try {
+            await pool.query(`
+                INSERT INTO solicitudes_sat
+                (id_solicitud, rfc, fecha_inicio, fecha_fin, tipo_solicitud, tipo_comprobante,
+                 estado_solicitud, codigo_estado_solicitud, mensaje, group_id, usuario_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                  estado_solicitud = VALUES(estado_solicitud),
+                  codigo_estado_solicitud = VALUES(codigo_estado_solicitud),
+                  mensaje = VALUES(mensaje),
+                  group_id = VALUES(group_id),
+                  usuario_id = COALESCE(solicitudes_sat.usuario_id, VALUES(usuario_id))
+            `, [
+                row.id_solicitud, rfc,
+                row.fecha_inicio || chunk.start,
+                row.fecha_fin    || chunk.end,
+                type, cfdi_type || 'Issued',
+                row.estado_solicitud || 0,
+                row.codigo_estado_solicitud || '',
+                row.mensaje || '',
+                groupId,
+                usuarioId || null
+            ]);
+        } catch (dbErr) {
+            console.error(`[SAT Job ${jobId}] DB error:`, dbErr.message);
+        }
+    }
+    return dataArr;
+}
+
+// Envía una sola petición al SAT para un chunk de fechas
+async function requestChunk({ rfc, paths, password, type, cfdi_type, status, chunk }) {
+    const cfdiTypeNorm = (cfdi_type || 'Issued').charAt(0).toUpperCase()
+                       + (cfdi_type || 'Issued').slice(1).toLowerCase();
+    const args = [
+        '--action', 'request',
+        '--rfc', rfc,
+        '--cer', paths.cer,
+        '--key', paths.key,
+        '--pwd', password,
+        '--start', chunk.start,
+        '--end',   chunk.end,
+        '--type',  type || 'Metadata',
+        '--cfdi_type', cfdiTypeNorm,
+        '--status', status || 'Todos'
+    ];
+    return runSatScript(args, 120000); // 2 min por chunk
+}
+
+// Background processing function — soporta rangos de 10+ años
 async function processRequestInBackground({ jobId, groupId, rfc, password, paths, start, end, type, cfdi_type, status, dateChunks, usuarioId }) {
     const job = jobs.get(jobId);
-    const allData = [];
-    const chunkErrors = [];
+    const allData      = [];
+    const chunkErrors  = [];
+    const skippedCodes = []; // 5002/5005/5004 — no son errores reales
     let processedCount = 0;
+    let subChunkCount  = 0; // chunks extra generados por auto-subdivisión 5003
 
     for (let i = 0; i < dateChunks.length; i++) {
         const chunk = dateChunks[i];
-        // Update progress
+        const totalVisible = dateChunks.length + subChunkCount;
         job.progress = i;
-        job.message = `Procesando período ${i + 1}/${dateChunks.length}: ${chunk.start} → ${chunk.end}`;
+        job.message  = `Período ${i + 1}/${totalVisible}: ${chunk.start} → ${chunk.end} (${type} ${cfdi_type})`;
         console.log(`[SAT Job ${jobId}] ${job.message}`);
 
-        const cfdiTypeNorm = (cfdi_type || 'Issued').charAt(0).toUpperCase() + (cfdi_type || 'Issued').slice(1).toLowerCase();
-
-        const args = [
-            '--action', 'request',
-            '--rfc', rfc,
-            '--cer', paths.cer,
-            '--key', paths.key,
-            '--pwd', password,
-            '--start', chunk.start,
-            '--end', chunk.end,
-            '--type', type || 'Metadata',
-            '--cfdi_type', cfdiTypeNorm,
-            '--status', status || 'Todos'
-        ];
+        // ── Delay controlado entre peticiones para no saturar al SAT ──────────
+        // Primer chunk: sin delay. Resto: 1.5 segundos
+        if (i > 0) await sleep(1500);
 
         try {
-            const result = await runSatScript(args, 120000); // 2 min per chunk
-            const rawData = result.data;
-            const dataArr = Array.isArray(rawData) ? rawData : (rawData ? [rawData] : []);
-            allData.push(...dataArr);
+            const result = await requestChunk({ rfc, paths, password, type, cfdi_type, status, chunk });
+            const saved  = await saveChunkToDB({ data: result.data, chunk, rfc, type, cfdi_type, groupId, usuarioId, jobId });
+            allData.push(...saved);
             processedCount++;
 
-            // Save each chunk result to DB immediately
-            for (const data of dataArr) {
-                if (!data || !data.id_solicitud || typeof data.id_solicitud !== 'string') continue;
-                try {
-                    await pool.query(`
-                        INSERT INTO solicitudes_sat
-                        (id_solicitud, rfc, fecha_inicio, fecha_fin, tipo_solicitud, tipo_comprobante,
-                         estado_solicitud, codigo_estado_solicitud, mensaje, group_id, usuario_id)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE
-                          estado_solicitud = VALUES(estado_solicitud),
-                          codigo_estado_solicitud = VALUES(codigo_estado_solicitud),
-                          mensaje = VALUES(mensaje),
-                          group_id = VALUES(group_id),
-                          usuario_id = COALESCE(solicitudes_sat.usuario_id, VALUES(usuario_id))
-                    `, [
-                        data.id_solicitud, rfc,
-                        data.fecha_inicio || chunk.start,  // ← chunk en scope aquí
-                        data.fecha_fin   || chunk.end,
-                        type, cfdi_type || 'Issued',
-                        data.estado_solicitud || 0,
-                        data.codigo_estado_solicitud || '',
-                        data.mensaje || '',
-                        groupId,
-                        usuarioId || null  // ← aislamiento multi-tenant
-                    ]);
-                } catch (dbErr) {
-                    console.error(`[SAT Job ${jobId}] DB error:`, dbErr.message);
-                }
-            }
-
         } catch (chunkErr) {
-            const errCode = chunkErr.data?.[0]?.code;
-            if (errCode === '404') {
-                // SAT código 404 = sin CFDIs en este período (resultado vacío, no es un error real)
+            const code = getSatCode(chunkErr);
+            const msg  = getErrMsg(chunkErr);
+
+            // ── Códigos que NO son errores reales — saltar silenciosamente ────
+            if (code === '404' || code === '5004') {
+                // Sin CFDIs en este período — resultado vacío, no es fallo
                 processedCount++;
-                console.log(`[SAT Job ${jobId}] Sin CFDIs en ${chunk.start}→${chunk.end} (período vacío)`);
+                console.log(`[SAT Job ${jobId}] Período vacío (${code}): ${chunk.start}→${chunk.end}`);
+
+            } else if (code === '5002') {
+                // Límite de por vida para esta combinación exacta de fechas — saltar
+                processedCount++;
+                skippedCodes.push(`${chunk.start}: límite de por vida (5002)`);
+                console.log(`[SAT Job ${jobId}] 5002 límite de por vida: ${chunk.start}→${chunk.end} — saltando`);
+
+            } else if (code === '5005') {
+                // Solicitud duplicada aún vigente — ya existe en SAT, no necesita reenviar
+                processedCount++;
+                skippedCodes.push(`${chunk.start}: solicitud duplicada (5005)`);
+                console.log(`[SAT Job ${jobId}] 5005 duplicado: ${chunk.start}→${chunk.end} — saltando`);
+
+            } else if (code === '5003') {
+                // ── AUTO-SUBDIVISIÓN: >200k CFDIs en el mes → dividir en semanas ─
+                console.log(`[SAT Job ${jobId}] 5003 tope máximo en ${chunk.start}→${chunk.end} — subdividiendo en semanas`);
+                job.message = `Subdiviendo ${chunk.start} en semanas (>200k CFDIs)...`;
+
+                const weekChunks = getWeeklyChunks(chunk.start.substring(0, 4));
+                // Filtrar solo las semanas que caen dentro del chunk original
+                const filtered   = weekChunks.filter(w => w.start >= chunk.start && w.end <= chunk.end);
+                subChunkCount   += filtered.length - 1; // -1 porque este chunk ya estaba contado
+
+                for (let wi = 0; wi < filtered.length; wi++) {
+                    const wChunk = filtered[wi];
+                    if (wi > 0) await sleep(1500); // delay entre semanas también
+                    job.message = `Semana ${wi + 1}/${filtered.length}: ${wChunk.start}→${wChunk.end}`;
+                    console.log(`[SAT Job ${jobId}] Semana: ${wChunk.start}→${wChunk.end}`);
+                    try {
+                        const wResult = await requestChunk({ rfc, paths, password, type, cfdi_type, status, chunk: wChunk });
+                        const saved   = await saveChunkToDB({ data: wResult.data, chunk: wChunk, rfc, type, cfdi_type, groupId, usuarioId, jobId });
+                        allData.push(...saved);
+                        processedCount++;
+                    } catch (wErr) {
+                        const wCode = getSatCode(wErr);
+                        if (wCode === '5002' || wCode === '5005' || wCode === '5004' || wCode === '404') {
+                            processedCount++; // saltar silenciosamente
+                        } else {
+                            chunkErrors.push(`[semana ${wChunk.start}→${wChunk.end}]: ${getErrMsg(wErr)}`);
+                        }
+                    }
+                }
+
+            } else if (code === '5011') {
+                // ── Límite DIARIO alcanzado — no tiene sentido seguir hoy ──────
+                console.error(`[SAT Job ${jobId}] 5011 límite diario alcanzado — deteniendo job`);
+                job.status = 'error';
+                job.error  = `Límite diario del SAT alcanzado (5011). Espera 24 horas antes de continuar. Se procesaron ${processedCount}/${dateChunks.length} períodos.`;
+                job.finishedAt = new Date().toISOString();
+                cleanTempPaths(paths);
+                setTimeout(() => jobs.delete(jobId), 30 * 60 * 1000);
+                return; // abortar el job completo
+
             } else {
-                // Error real del SAT o del sistema
-                console.error(`[SAT Job ${jobId}] Chunk error ${chunk.start}-${chunk.end}:`, JSON.stringify(chunkErr).substring(0, 500));
-                // El sat_wrapper puede devolver { status:'error', data:[{message,error,code}] } sin .message raíz
-                let msg = chunkErr.message
-                       || chunkErr.data?.[0]?.message
-                       || chunkErr.data?.[0]?.error
-                       || (chunkErr.data ? `SAT: ${JSON.stringify(chunkErr.data).substring(0, 150)}` : '')
-                       || 'Error desconocido';
-                if (chunkErr.error && !msg.includes(chunkErr.error)) msg += `: ${chunkErr.error}`;
-                chunkErrors.push(`[${chunk.start}→${chunk.end}]: ${msg}`);
+                // Error genuino — registrar y continuar con el siguiente período
+                console.error(`[SAT Job ${jobId}] Error en ${chunk.start}→${chunk.end} (${code}):`, msg);
+                chunkErrors.push(`[${chunk.start}→${chunk.end}] (${code}): ${msg}`);
             }
         }
     }
 
-    // Mark job complete
-    if (processedCount === 0) {
+    // ── Marcar job como completado ──────────────────────────────────────────
+    if (processedCount === 0 && chunkErrors.length > 0) {
         job.status = 'error';
-        job.error = `Fallaron todos los períodos. ${chunkErrors.join(' | ')}`;
+        job.error  = `Fallaron todos los períodos. ${chunkErrors.slice(0, 5).join(' | ')}`;
         job.message = 'Error en la solicitud';
     } else {
-        job.status = 'done';
-        job.progress = dateChunks.length;
-        job.data = allData;
+        job.status    = 'done';
+        job.progress  = dateChunks.length;
+        job.data      = allData;
         job.savedCount = allData.length;
-        job.message = `Completado — ${processedCount}/${dateChunks.length} períodos procesados, ${allData.length} solicitudes registradas.`;
-        if (chunkErrors.length > 0) {
-            job.warnings = chunkErrors;
-        }
+        const skipNote = skippedCodes.length > 0 ? ` (${skippedCodes.length} periodos saltados por límite/duplicado)` : '';
+        job.message = `Completado — ${processedCount}/${dateChunks.length + subChunkCount} períodos, ${allData.length} solicitudes registradas.${skipNote}`;
+        if (chunkErrors.length > 0) job.warnings = chunkErrors;
+        if (skippedCodes.length > 0) job.skipped = skippedCodes;
     }
 
     job.finishedAt = new Date().toISOString();
     console.log(`[SAT Job ${jobId}] ${job.message}`);
 
-    // Limpiar archivos FIEL temporales de /tmp
     cleanTempPaths(paths);
-
-    // Auto-cleanup job after 30 min
     setTimeout(() => jobs.delete(jobId), 30 * 60 * 1000);
 }
 

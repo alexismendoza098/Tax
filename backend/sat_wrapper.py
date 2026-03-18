@@ -65,7 +65,8 @@ class SatIntegration:
         self.token = None
         
         # Configurar directorio de salida por RFC
-        base_dir = os.path.join(os.getcwd(), 'downloads')
+        # Usa DOWNLOAD_DIR si está definida (Railway Volume), de lo contrario usa 'downloads/'
+        base_dir = os.environ.get('DOWNLOAD_DIR', os.path.join(os.getcwd(), 'downloads'))
         self.output_dir = os.path.join(base_dir, self.rfc)
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
@@ -368,11 +369,9 @@ if __name__ == "__main__":
             # Check if any success
             successes = [r for r in results if 'id_solicitud' in r]
             if successes:
-                # If single result, return like before for minimal breakage, OR standard list
-                # Let's return a list in 'data' and handle it in sat.js
-                 print(json.dumps({"status": "success", "data": results})) # data is list
+                print(json.dumps({"status": "success", "data": results}))
             else:
-                 print(json.dumps({"status": "error", "data": results}))
+                print(json.dumps({"status": "error", "data": results}))
 
         elif args.action == 'verify':
             if not args.id:
